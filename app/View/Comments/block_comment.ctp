@@ -1,0 +1,1 @@
+<?php echo $this->element('comment_block', array('comment'=>$commentInfo));?>	

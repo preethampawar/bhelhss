@@ -1,0 +1,1 @@
+<?php echo $this->element('show_post_photo', array('photoInfo'=>$imageInfo));?>	
