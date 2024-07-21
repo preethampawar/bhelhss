@@ -45,8 +45,8 @@ class PagesController extends AppController {
 	public $uses = array();
 
 	public function beforeFilter() {
+		$this->Auth->allow();
 		parent::beforeFilter();
-		$this->Auth->allow('*');
 	}
 
 /**
@@ -58,6 +58,7 @@ class PagesController extends AppController {
  *   or MissingViewException in debug mode.
  */
 	public function display() {
+		$this->layout = 'hss';
 		$path = func_get_args();
 
 		$count = count($path);

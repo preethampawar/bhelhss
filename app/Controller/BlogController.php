@@ -2,29 +2,29 @@
 App::uses('CakeEmail', 'Network/Email');
 class BlogController extends AppController {
 	var $name = 'Blog';
-	
+
 	public function beforeFilter() {
-		parent::beforeFilter();		
+		parent::beforeFilter();
 		$this->Auth->allow('posts_show_all', 'posts_show');
-	}	
-	
+	}
+
 	public function posts_show_all() {
 		$categoryID = Configure::read('CategoryBlogID');
 		$conditions = array('Blog.category_id'=>$categoryID);
 		$blogs = $this->Blog->find('all', array('conditions'=>$conditions));
-		
+
 		$this->paginate = array(
 				'limit' => 50,
 				'order' => array('Blog.created'=>'DESC'),
-				'conditions' => $conditions				
+				'conditions' => $conditions
 				);
-		$blogs = $this->paginate();	
-		
-		$this->set('blogs', $blogs);	
+		$blogs = $this->paginate();
+
+		$this->set('blogs', $blogs);
 	}
-	
-	public function posts_show($blogID) {		
-	
+
+	public function posts_show($blogID) {
+
 		if(!$blogInfo = $this->Blog->findById($blogID)) {
 			$this->Session->setFlash('Page not found', 'default', array('class'=>'error'));
 			$this->redirect('/blog/posts_show_all');
@@ -37,44 +37,44 @@ class BlogController extends AppController {
 
 		$this->set(compact('blogInfo'));
 	}
-	
+
 	/**
 	 * Function to create a post by user
 	 */
 	public function posts_create() {
-		$categoryID = Configure::read('CategoryBlogID');	
-		
+		$categoryID = Configure::read('CategoryBlogID');
+
 		$errorMsg = array();
-		
+
 		if($this->request->isPost()) {
 			$data = $this->request->data;
 
 			// Validate name
 			if(Validation::blank($data['Blog']['title'])) {
 				$errorMsg[] = 'Enter Title';
-			}			
-			
+			}
+
 			// Sanitize data
 			$data['Blog']['title'] = Sanitize::paranoid($data['Blog']['title'], array(' ','-','!',',','.', '(',')'));
 			$data['Blog']['category_id'] = $categoryID;
 			$data['Blog']['user_id'] = $this->Session->read('User.id');
-						
+
 			if(!$errorMsg) {
 				$conditions = array('Blog.title'=>$data['Blog']['title']);
 				if($this->Blog->find('first', array('conditions'=>$conditions))) {
 					$errorMsg[] = 'Post with title "'.$data['Blog']['title'].'" already exists';
 				}
-				else {					
+				else {
 					if($this->Blog->save($data)) {
 						$blogInfo = $this->Blog->read();
-						
+
 						$tmp['Activity']['type'] = 'post_add';
-						$tmp['Activity']['title'] = $blogInfo['Blog']['title'];			
+						$tmp['Activity']['title'] = $blogInfo['Blog']['title'];
 						$tmp['Activity']['post_id'] = $blogInfo['Blog']['id'];
 						$tmp['Activity']['category_id'] = $categoryID;
 						$tmp['Activity']['url'] = '/blog/posts_show/'.$blogInfo['Blog']['id'].'/'.Inflector::slug($blogInfo['Blog']['title'], '-');
 						$this->saveActivity($tmp);
-						
+
 						// Notify all users
 						$messageType = 'notification';
 						$subject = 'New post has been added titled "'.$blogInfo['Blog']['title'].'"';
@@ -92,36 +92,36 @@ http://www.bhelhss.com/users/subscribe
 bhelhss.com
 support@bhelhss.com
 
-This message is for notification purpose only and is auto generated. Please do not reply. 		
+This message is for notification purpose only and is auto generated. Please do not reply.
 
-';				
-						try {					
+';
+						try {
 							$this->sendBulkEmail($messageType, $subject, $message);
 						}
 						catch(Exception $e) {
-						
-						}						
-						
+
+						}
+
 						$this->Session->setFlash('Post successfully added', 'default', array('class'=>'success'));
 						$this->redirect('/blog/posts_show_all');
 					}
 					else {
-						$errorMsg[] = 'An error occured while communicating with the server';
+						$errorMsg[] = 'An error occurred while communicating with the server';
 					}
 				}
-			}		
+			}
 		}
-		
+
 		$errorMsg = implode('<br>', $errorMsg);
 		$this->set(compact('errorMsg'));
 	}
-	
+
 	/**
 	 * Function to edit a post
 	 */
 	public function posts_edit($blogID) {
-		$categoryID = Configure::read('CategoryBlogID');	
-		
+		$categoryID = Configure::read('CategoryBlogID');
+
 		if(!$blogInfo = $this->Blog->findById($blogID)) {
 			$this->Session->setFlash('Page not found', 'default', array('class'=>'error'));
 			$this->redirect('/blog/posts_show_all');
@@ -134,7 +134,7 @@ This message is for notification purpose only and is auto generated. Please do n
 				}
 			}
 		}
-		
+
 		$errorMsg = array();
 		if($this->request->isPut()) {
 			$data = $this->request->data;
@@ -142,44 +142,44 @@ This message is for notification purpose only and is auto generated. Please do n
 			// Validate name
 			if(Validation::blank($data['Blog']['title'])) {
 				$errorMsg[] = 'Enter Title';
-			}			
-			
+			}
+
 			// Sanitize data
 			$data['Blog']['title'] = Sanitize::paranoid($data['Blog']['title'], array(' ','-','!',',','.', '(',')'));
 			$data['Blog']['category_id'] = $categoryID;
 			$data['Blog']['id'] = $blogID;
-						
+
 			if(!$errorMsg) {
 				$conditions = array('Blog.title'=>$data['Blog']['title'], 'Blog.id NOT'=>$blogID);
 				if($this->Blog->find('first', array('conditions'=>$conditions))) {
 					$errorMsg[] = 'Post with title "'.$data['Blog']['title'].'" already exists';
 				}
-				else {					
+				else {
 					if($this->Blog->save($data)) {
-						$blogInfo = $this->Blog->read();			
+						$blogInfo = $this->Blog->read();
 						$this->Session->setFlash('Post successfully added', 'default', array('class'=>'success'));
 						$this->redirect('/blog/posts_show/'.$blogID.'/'.Inflector::slug($blogInfo['Blog']['title']));
 					}
 					else {
-						$errorMsg[] = 'An error occured while communicating with the server';
+						$errorMsg[] = 'An error occurred while communicating with the server';
 					}
 				}
-			}		
+			}
 		}
 		else {
 			$this->data = $blogInfo;
-		}		
-		
+		}
+
 		$errorMsg = implode('<br>', $errorMsg);
 		$this->set(compact('errorMsg', 'blogInfo'));
 	}
-	
+
 	/**
 	 * Function to delete a post
 	 */
 	public function posts_delete($blogID) {
-		$categoryID = Configure::read('CategoryBlogID');	
-		
+		$categoryID = Configure::read('CategoryBlogID');
+
 		if(!$blogInfo = $this->Blog->findById($blogID)) {
 			$this->Session->setFlash('Page not found', 'default', array('class'=>'error'));
 			$this->redirect('/blog/posts_show_all');
@@ -192,16 +192,16 @@ This message is for notification purpose only and is auto generated. Please do n
 				}
 			}
 		}
-		
+
 		$this->deletePost($blogID, $categoryID);
 		$this->Session->setFlash('Post deleted successfully', 'default', array('class'=>'success'));
 		$this->redirect('/blog/posts_show_all');
-		
+
 	}
-	
+
 	public function block_post($blogID) {
-		$categoryID = Configure::read('CategoryBlogID');	
-		
+		$categoryID = Configure::read('CategoryBlogID');
+
 		if(!$blogInfo = $this->Blog->findById($blogID)) {
 			$this->Session->setFlash('Page not found', 'default', array('class'=>'error'));
 			$this->redirect('/blog/posts_show_all');
@@ -209,10 +209,10 @@ This message is for notification purpose only and is auto generated. Please do n
 		$blockUserIDs = $blogInfo['Blog']['block_user_ids'];
 		$currentUserID = $this->Session->read('User.id');
 		$data = array();
-		
+
 		$blockPost =false;
 		if(!empty($blockUserIDs)) {
-			$userIDsArray = explode(',',$blockUserIDs);			
+			$userIDsArray = explode(',',$blockUserIDs);
 			if(!in_array($currentUserID, $userIDsArray)) {
 				$userIDsArray[] = $currentUserID;
 				$blockPost = true;
@@ -230,12 +230,12 @@ This message is for notification purpose only and is auto generated. Please do n
 
 		if($blockPost) {
 			$tmp['Activity']['type'] = 'post_block';
-			$tmp['Activity']['title'] = $blogInfo['Blog']['title'];			
+			$tmp['Activity']['title'] = $blogInfo['Blog']['title'];
 			$tmp['Activity']['post_id'] = $blogInfo['Blog']['id'];
 			$tmp['Activity']['category_id'] = $categoryID;
 			$tmp['Activity']['url'] = '/blog/posts_show/'.$blogInfo['Blog']['id'].'/'.Inflector::slug($blogInfo['Blog']['title'], '-');
 			$this->saveActivity($tmp);
-			
+
 			// Notify all users
 			$messageType = 'notification';
 			$subject = 'Request to block post: "'.$blogInfo['Blog']['title'].'"';
@@ -253,38 +253,38 @@ http://www.bhelhss.com/users/subscribe
 bhelhss.com
 support@bhelhss.com
 
-This message is for notification purpose only and is auto generated. Please do not reply. 		
+This message is for notification purpose only and is auto generated. Please do not reply.
 
-';				
-			try {					
+';
+			try {
 				$this->sendBulkEmail($messageType, $subject, $message);
 			}
 			catch(Exception $e) {
-			
+
 			}
-			
+
 		}
-		
+
 		// if block votes reach max limit then remove the post.
 		$blockCount = Configure::read('PostBlockVotes');
-		
+
 		$this->Blog->recursive = -1;
 		$blogInfo = $this->Blog->findById($blogID);
 		$blockUserIDs = $blogInfo['Blog']['block_user_ids'];
 		if(!empty($blockUserIDs)) {
-			$userIDsArray = explode(',',$blockUserIDs);			
+			$userIDsArray = explode(',',$blockUserIDs);
 			$currentBlockCount = count($userIDsArray);
-			
+
 			if($currentBlockCount >= $blockCount) {
 				// remove post
 				$this->deletePost($blogID, $categoryID);
 				$this->Session->setFlash('Post has been removed.', 'default', array('class'=>'success'));
 				$this->redirect('/blog/posts_show_all/');
-			}						
+			}
 		}
 		$this->Session->setFlash('Your vote has been counted.', 'default', array('class'=>'success'));
 		$this->redirect('/blog/posts_show/'.$blogID.'/'.Inflector::slug($blogInfo['Blog']['title']));
 	}
-	
+
 }
 ?>

@@ -123,7 +123,7 @@ if(isset($this->params['controller']) and ($this->params['controller'] == 'pages
 </div>
 <!-- ####################################################################################################### -->
 <?php
-echo $this->element('footer');
+// echo $this->element('footer');
 //echo $this->element('sql_dump');
 ?>
 </body>

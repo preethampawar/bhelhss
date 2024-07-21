@@ -20,10 +20,12 @@
  */
 
 App::uses('Controller', 'Controller');
+App::uses('AccessController', 'Controller');
 App::uses('Validation', 'Utility');
 App::uses('Sanitize', 'Utility');
 App::uses('Folder', 'Utility');
 App::uses('File', 'Utility');
+App::uses('Security', 'Utility');
 App::uses('AuthComponent', 'Controller/Component');
 App::uses('CakeEmail', 'Network/Email');
 
@@ -42,14 +44,15 @@ class AppController extends Controller {
 	public $components = array(
 		'Session',
 		'Auth' => array(
-			'loginRedirect' => '/',
+			'loginRedirect' => '/admin/categories/',
 			'logoutRedirect' => '/',
 			'authenticate' => array(
 				'Form' => array(
 					'fields' => array('username' => 'email')
 				)
 			)
-		)
+		),
+		'Flash'
 	);
 
 	public function beforeFilter() {
@@ -73,6 +76,8 @@ class AppController extends Controller {
 
 		if($this->request->isAjax()) {
 			$this->layout = 'ajax';
+		} else {
+			$this->layout = $this->Session->check('Auth.User.id') ? 'default' : 'hss';
 		}
 
 		if(!$this->Session->check('SiteVisitSet')) {
@@ -87,7 +92,6 @@ class AppController extends Controller {
 
 
 		if($this->Session->check('User')) {
-
 			// Check if the logged in user has completed his profile and know the user type(student or teacher or pricipal or non teaching staff)
 			$hasCompletedProfile = $this->Session->read('User.has_completed_profile');
 			if(!$hasCompletedProfile) {
@@ -141,7 +145,6 @@ class AppController extends Controller {
 	 * Function to give user access to specific controllers and actions
 	 */
 	public function checkUserAccess() {
-		App::uses('AccessController', 'Controller');
 		$AccessController = new AccessController;
 		$AccessController->constructClasses();
 
@@ -177,14 +180,10 @@ class AppController extends Controller {
 			$validImage = false;
 			if ($info) {
 				switch ($info[2]) {
+					case IMAGETYPE_GIF:
+					case IMAGETYPE_JPEG:
 					case IMAGETYPE_PNG:
 						$validImage = true; break;
-					case IMAGETYPE_JPEG:
-						$validImage = true; break;
-					case IMAGETYPE_GIF:
-						$validImage = true; break;
-					default:
-						$validImage = false; break;
 				}
 			}
 			return ($validImage) ? true : false;
