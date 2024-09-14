@@ -2,7 +2,7 @@
 $name = $this->data['User']['name'] ?? '';
 $phone = $this->data['User']['phone'] ?? '';
 $email = $this->data['User']['email'] ?? '';
-$type = $this->data['User']['type'] ?? '';
+$message = $this->data['User']['message'] ?? '';
 ?>
 <style>
 	body {
@@ -48,7 +48,32 @@ $type = $this->data['User']['type'] ?? '';
 							<input type="text" name="data[User][phone]" placeholder="Phone" data-form-field="phone" class="form-control" value="<?php echo $phone; ?>" id="phone-contact-form">
 						</div>
 						<div class="col-md col-sm-12 form-group mb-3" data-for="message">
-							<textarea name="data[User][message]" placeholder="Message*" data-form-field="message" class="form-control" id="message-contact-form-3-uie1F6KRbz" required></textarea>
+							<textarea name="data[User][message]" placeholder="Message*" data-form-field="message" class="form-control" id="message-contact-form-3-uie1F6KRbz" required><?php echo $message; ?></textarea>
+						</div>
+						<div class="row justify-content-center mx-auto mb-3">
+							<div class="col-md col-sm-12 mb-3 bg-light px-2 py-3 border rounded-3" data-for="captcha-text">
+								<label for="captcha-image" class="d-block ms-2">
+									Captcha <span class="fs-5 text-info fw-bold" role="button" onclick="document.getElementById('captcha-image').src='/hss/getcaptcha?i='+Math.random();">&#x27f3;</span>
+								</label>
+								<div class="input-group">
+								<span class="input-group-text bg-transparent border-0">
+									<img
+										id="captcha-image"
+										src="/hss/getcaptcha?<?php echo time(); ?>"
+										class="mt-2"
+										alt="Enter this text"
+										style="width: 180px; border-radius:0 !important;"
+										onclick="this.src='/hss/getcaptcha?i='+Math.random();"
+										title="Click here to reload Captcha"
+										role="button"
+									>
+								</span>
+									<div class="flex-fill mt-2 pt-1">
+										<input type="text" name="data[Image][captcha]" placeholder="Enter Captcha" data-form-field="captcha" class="form-control w-100" value="" id="captcha-register-form" required>
+									</div>
+								</div>
+							</div>
+
 						</div>
 						<div class="col-lg-12 col-md-12 col-sm-12 align-center mbr-section-btn">
 							<button type="submit" class="btn btn-primary display-7">Send Message</button>

@@ -1,4 +1,3 @@
-
 <div class="container">
 	<div class="col-md-6 m-auto p-5 bg-light rounded-3 text-center" style="border-radius: 2rem !important;">
 		<?php echo $this->element('message');?>

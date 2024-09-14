@@ -2,7 +2,6 @@
 App::uses('CakeEmail', 'Network/Email');
 class AlumniMembersController extends AppController
 {
-
 	public function beforeFilter()
 	{
 		parent::beforeFilter();
@@ -12,8 +11,9 @@ class AlumniMembersController extends AppController
 
 	public function index($download = 0)
 	{
-		$title_for_layout = 'Manage Alumni Members';
 		$conditions = [];
+		$title_for_layout = 'Manage Alumni Members';
+		$searchBy = $this->request->query['searchby'] ?? 'total-registered';
 
 		if ($this->request->is('post')) {
 			$searchText = $this->data['AlumniMember']['search_text'];
@@ -30,6 +30,18 @@ class AlumniMembersController extends AppController
 			}
 		}
 
+		if ($searchBy === 'registered-today') {
+			$conditions['DATE(AlumniMember.created)'] = date('Y-m-d');
+		}
+
+		if ($searchBy === 'accounts-verified') {
+			$conditions['AlumniMember.account_verified'] = 1;
+		}
+
+		if ($searchBy === 'payments-confirmed') {
+			$conditions['AlumniMember.payment_confirmed'] = 1;
+		}
+
 		$alumniMembers = $this->AlumniMember->find('all', [
 			'order' => ['AlumniMember.created desc'],
 			'conditions' => $conditions,
@@ -39,7 +51,7 @@ class AlumniMembersController extends AppController
 			ini_set('max_execution_time', '10000');
 			ini_set('memory_limit', '1024M');
 
-			$fileName = 'MembersList-' . time() . '.csv';
+			$fileName = 'MembersList-' . $searchBy . '-' . time() . '.csv';
 			$this->layout = 'ajax';
 
 			$this->response->compress();
@@ -62,7 +74,19 @@ class AlumniMembersController extends AppController
 			'conditions' => $conditions,
 		]);
 
-		$this->set(compact('alumniMembers', 'download', 'title_for_layout', 'allAlumniMembersCount', 'todaysAlumniMembersCount'));
+		// get total payments confirmed
+		$paymentsConfirmedCount = $this->AlumniMember->find('count', [
+			'order' => ['AlumniMember.name'],
+			'conditions' => ['AlumniMember.payment_confirmed' => 1],
+		]);
+
+		// get total accounts confirmed
+		$accountsVerifiedCount = $this->AlumniMember->find('count', [
+			'order' => ['AlumniMember.name'],
+			'conditions' => ['AlumniMember.account_verified' => 1],
+		]);
+
+		$this->set(compact('alumniMembers', 'download', 'title_for_layout', 'allAlumniMembersCount', 'todaysAlumniMembersCount', 'paymentsConfirmedCount', 'accountsVerifiedCount', 'searchBy'));
 	}
 
 	public function delete($alumniMemberId)

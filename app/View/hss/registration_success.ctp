@@ -2,16 +2,28 @@
 	<div class="container">
 		<div class="row justify-content-center">
 			<div class="title col-md-12 col-lg-10">
-<br><br>
-				<h3 class="mbr-section-title mbr-fonts-style align-center mt-0 mb-0 display-2 text-success">
-					<strong>Registration Successful!</strong>
-				</h3>
-				<h4 class="mbr-section-subtitle align-center mbr-fonts-style mt-4 display-7">
-					Thank you for registering yourself for Euphoria 2024 Reunion event.
+				<h4 class="mbr-section-subtitle align-center mbr-fonts-style  display-7">
+					You have successfully registered yourself for Euphoria 2024 Reunion event.
 				</h4>
-				<br><br>
-				<div class="text-center">
-					<a href="/" class="btn btn-primary btn-lg rounded-pill">Back to Homepage</a>
+				<div class="text-center mt-4">
+
+					<h5>Payment verification is pending.</h5>
+					<div>
+						You will be notified once the payment details are confirmed.
+					</div>
+
+
+				</div>
+
+
+				<div class="text-center mt-5 bg-light px-4 py-4" style="border-radius: 15px;">
+					<div class="mb-3">Your contribution, big or small, will make a difference!</div>
+					<a href="/hss/donations" class="btn btn-primary btn-lg rounded-pill">Donate Now!</a>
+
+
+					<div class="mt-3">
+						Thank you for your support.
+					</div>
 				</div>
 
 				<br><br><br><br><br>
@@ -19,3 +31,4 @@
 		</div>
 	</div>
 </section>
+

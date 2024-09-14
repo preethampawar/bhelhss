@@ -8,26 +8,29 @@ class CategoriesController extends AppController {
 	}
 
 
-	function getCategories() {
+	public function getCategories() {
 		$conditions = array('Category.active'=>'1');
 		$categories = $this->Category->find('all', array('conditions'=>$conditions, 'recursive'=>'-1', 'order'=>'Category.name ASC'));
 		return $categories;
 	}
 
-	function admin_getCategories() {
+	public function admin_getCategories() {
 		$conditions = array();
 		$categories = $this->Category->find('all', array('conditions'=>$conditions, 'recursive'=>'-1', 'order'=>'Category.name ASC'));
 		return $categories;
 	}
 
-	function admin_index() {
+	public function admin_index() {
+		$conditions = array('Category.active'=>'1');
+		$categories = $this->Category->find('all', array('conditions'=>$conditions, 'recursive'=>'-1', 'order'=>'Category.name ASC'));
 		$categoryInfoLinkActive = true;
 		$title_for_layout = 'Manage Posts';
 		$this->set('categoryInfoLinkActive', $categoryInfoLinkActive);
 		$this->set('title_for_layout', $title_for_layout);
+		$this->set('categories', $categories);
 	}
 
-	function admin_add() {
+	public function admin_add() {
 
 		$errorMsg = array();
 		if($this->request->isPost()) {
@@ -61,7 +64,7 @@ class CategoriesController extends AppController {
 		$this->set(compact('errorMsg'));
 	}
 
-	function admin_edit($categoryID) {
+	public function admin_edit($categoryID) {
 		$errorMsg = array();
 		$categoryInfoLinkActive = true;
 		if(!$categoryInfo = $this->isCategory($categoryID)) {
@@ -104,7 +107,7 @@ class CategoriesController extends AppController {
 		$this->set(compact('errorMsg', 'categoryInfo', 'categoryInfoLinkActive'));
 	}
 
-	function admin_delete($categoryID) {
+	public function admin_delete($categoryID) {
 		if($categoryInfo = $this->isCategory($categoryID)) {
 			$this->deleteCategory($categoryID);
 			$this->Session->setFlash('Category successfully deleted', 'default', array('class'=>'success'));
@@ -115,7 +118,7 @@ class CategoriesController extends AppController {
 		$this->redirect('/admin/categories/');
 	}
 
-	function admin_showProducts($categoryID) {
+	public function admin_showProducts($categoryID) {
 		$errorMsg = null;
 		if(!$categoryInfo = $this->isCategory($categoryID)) {
 			$this->Session->setFlash('Category Not Found', 'default', array('class'=>'default'));

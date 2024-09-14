@@ -2,12 +2,41 @@
 App::uses('CakeEmail', 'Network/Email');
 App::uses('AlumniMember', 'Model');
 App::uses('ContactMessage', 'Model');
+App::uses('Payment', 'Model');
 App::uses('Post', 'Model');
-class HssController extends AppController {
+App::uses('Folder', 'Utility');
+App::uses('File', 'Utility');
 
-	public function beforeFilter() {
+class HssController extends AppController
+{
+	private $allowedMethods = [
+		'about_us',
+		'about_school',
+		'news_and_events',
+		'contact_us',
+		'contact_message_sent',
+		'alumni_member_login',
+		'alumni_member_login_verification',
+		'register',
+		'alumni_member_registration_verification',
+		'getcaptcha',
+		'gallery',
+		'testEmail',
+	];
+
+	public function beforeFilter()
+	{
 		parent::beforeFilter();
 		$this->Auth->allow(); // Letting users register themselves
+		$alumniMemberInfo = $this->Session->read('AlumniMember');
+		$userInfo = $this->Auth->user();
+
+		// wrapper to allow pubic pages and access to allow alumni members bypassing CakePHP Auth
+		if (!in_array($this->action, $this->allowedMethods)
+			&& empty($alumniMemberInfo) && empty($userInfo)) {
+			$this->redirect('/hss/alumni_member_login');
+		}
+
 		$this->layout = 'hss';
 	}
 
@@ -20,6 +49,7 @@ class HssController extends AppController {
 	{
 		$slug = 'about-school';
 		$postModel = new Post();
+		$postModel->bindModel(['hasMany' => ['Image']]);
 		$post = $postModel->findBySlug($slug);
 
 		$this->set(compact('post'));
@@ -33,7 +63,7 @@ class HssController extends AppController {
 		$posts = $postModel->find('all', [
 			'conditions' => ['Post.category_id' => $categoryId, 'Post.active' => 1],
 			'order' => 'Post.created DESC',
-			'limit' => 50
+			'limit' => 200
 		]);
 
 		$this->set(compact('posts'));
@@ -49,7 +79,7 @@ class HssController extends AppController {
 			$response = $this->save_contactus_data($data);
 
 			if ($response['success']) {
-				$this->Flash->set('Thank you for contacting us. We will get back to you at the earliest.', ['class' => 'alert alert-success']);
+				$this->Flash->set('Thank you for contacting us. We will get back to you at the earliest.', ['element' => 'success']);
 				$this->redirect('/hss/contact_message_sent');
 			}
 
@@ -59,7 +89,8 @@ class HssController extends AppController {
 		$this->set(compact('errorMsg'));
 	}
 
-	private function save_contactus_data($data) {
+	private function save_contactus_data($data)
+	{
 		$contactMessage = new ContactMessage();
 		$errorMsg = array();
 		$response['success'] = false;
@@ -71,49 +102,62 @@ class HssController extends AppController {
 		// validate user email
 		if (Validation::blank($data['User']['name'])) {
 			$errorMsg[] = 'Enter Name.';
-		} elseif(Validation::blank($data['User']['email'])) {
+		} elseif (Validation::blank($data['User']['email'])) {
 			$errorMsg[] = 'Enter Email Address.';
-		} elseif(!(Validation::email($data['User']['email']))) {
+		} elseif (!(Validation::email($data['User']['email']))) {
 			$errorMsg[] = 'Invalid Email Address.';
 		} elseif (Validation::blank($data['User']['message'])) {
 			$errorMsg[] = 'Enter message.';
 		}
 
-		if(empty($errorMsg)) {
+		//validate captcha
+		if (isset($data['Image']['captcha'])) {
+			$captcha = $this->Session->read('captcha');
+
+			if ($captcha || empty($data['Image']['captcha'])) {
+				if ($data['Image']['captcha'] != $captcha) {
+					$errorMsg[] = 'Invalid Captcha.';
+				}
+			} else {
+				$errorMsg[] = 'Captcha is empty or not valid.';
+			}
+		}
+
+		if (empty($errorMsg)) {
 			$data = $this->sanitizeData($data);
 		}
 
-		if(empty($errorMsg)) {
+		if (empty($errorMsg)) {
 			$data['ContactMessage'] = $data['User'];
 			$data['ContactMessage']['id'] = null;
 
-			if($contactMessage->save($data)) {
+			if ($contactMessage->save($data)) {
 				$response['success'] = true;
 				$contactInfo = $contactMessage->read();
 				$response['memberInfo'] = $contactInfo;
 				$userName = $contactInfo['ContactMessage']['name'];
 				$userEmail = $contactInfo['ContactMessage']['email'];
+				$adminEmail = 'admin@bhelhss.com';
 
 				$mailContent = '
-Dear '.$userName.',
-
+Dear ' . $userName . ',
+<br><br>
 Thank you for contacting BHEL HSS Alumni. We will get back to you as soon as possible.
-
--
-'.Configure::read('Domain').'
-
+<br><br>
+-<br>
+' . Configure::read('Domain') . '
+<br><br>
 
 *This is a system generated message. Please do not reply.
 
 ';
-				$email = new CakeEmail();
-				$email->from(array('noreply@bhelhss.com' => 'bhelhss.com'));
-				$email->to($userEmail);
+				$email = new CakeEmail('smtpNoReply');
+				$email->to($adminEmail);
 				$email->subject('Contact message');
-				// $email->send($mailContent); //todo: uncomment if email has to be sent
+				$email->emailFormat('html');
+				$email->send($mailContent);
 
-			}
-			else {
+			} else {
 				$response['errors'] = 'An error occurred while communicating with the server. Please try again.';
 			}
 		}
@@ -126,8 +170,8 @@ Thank you for contacting BHEL HSS Alumni. We will get back to you as soon as pos
 		return $response;
 	}
 
-
-	function sanitizeContactUsData($data) {
+	private function sanitizeContactUsData($data)
+	{
 		// Initialize & Sanitize data
 		$data['User']['name'] = (isset($data['User']['name'])) ? htmlentities($data['User']['name'], ENT_QUOTES) : null;
 		$data['User']['email'] = (isset($data['User']['email'])) ? htmlentities($data['User']['email'], ENT_QUOTES) : null;
@@ -142,6 +186,167 @@ Thank you for contacting BHEL HSS Alumni. We will get back to you as soon as pos
 
 	}
 
+	public function alumni_member_login()
+	{
+		$errorMsg = [];
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+
+			if (Validation::blank($data['User']['email'])) {
+				$errorMsg[] = 'Enter Email Address.';
+			} elseif (!Validation::email($data['User']['email'])) {
+				$errorMsg[] = 'Enter Valid Email Address.';
+			}
+//			if (Validation::blank($data['User']['phone'])) {
+//				$errorMsg[] = 'Enter Phone Number.';
+//			}
+
+			$emailAddress = $data['User']['email'];
+//			$phoneNumber = $data['User']['phone'];
+
+			$alumniMember = new AlumniMember();
+			$memberInfo = $alumniMember->find('first', ['conditions' => ['AlumniMember.email' => $emailAddress]]);
+
+			if ($memberInfo) {
+				$otp = rand(1000, 9999);
+				$this->Session->write('LoginOtp', $otp);
+				$this->Session->write('AlumniMemberNotVerified', $memberInfo['AlumniMember']);
+
+				// send otp in email / sms
+				$userName = $memberInfo['AlumniMember']['name'];
+				$userEmail = $memberInfo['AlumniMember']['email'];
+
+				$mailContent = '
+Dear ' . $userName . ',
+<br><br>
+Your login OTP is <b>' . $otp . '</b>.
+<br><br>
+-<br>
+' . Configure::read('Domain') . '
+<br><br>
+
+*This is a system generated message. Please do not reply.
+
+';
+				$email = new CakeEmail('smtpNoReply');
+				$email->emailFormat('html');
+				$email->to([$userEmail => $userEmail]);
+				$email->subject('Login OTP - ' . $otp);
+				$email->send($mailContent);
+
+
+				$this->redirect('/hss/alumni_member_login_verification');
+			} else {
+				$errorMsg[] = 'User not found.';
+			}
+		}
+
+		if (count($errorMsg) > 0) {
+			$errorMsg = implode('<br/>', $errorMsg);
+		}
+
+		$this->set(compact('errorMsg'));
+	}
+
+	public function alumni_member_login_verification()
+	{
+		$errorMsg = '';
+		$otp = $this->Session->read('LoginOtp');
+		$alumniMemberNotVerified = $this->Session->read('AlumniMemberNotVerified');
+
+		if (empty($alumniMemberNotVerified) || empty($otp)) {
+			$this->redirect('/hss/alumni_member_login');
+		}
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+
+			if (Validation::blank($data['User']['otp'])) {
+				$errorMsg = 'Enter OTP.';
+			} elseif ($otp != $data['User']['otp']) {
+				$errorMsg = 'Invalid OTP.';
+			}
+
+			if (empty($errorMsg)) {
+				$this->Session->write('AlumniMember', $alumniMemberNotVerified);
+				$this->Session->delete('LoginOtp');
+				$this->Session->delete('AlumniMemberNotVerified');
+
+				$this->Flash->set('You are logged in successfully.', ['element' => 'success']);
+				$this->redirect('/');
+			}
+		}
+
+		$this->set(compact('errorMsg'));
+	}
+
+	public function alumni_member_profile()
+	{
+		$errorMsg = '';
+		$tmp['User']['name'] = $this->Session->read('AlumniMember.name');
+		$tmp['User']['phone'] = $this->Session->read('AlumniMember.phone');
+		$tmp['User']['email'] = $this->Session->read('AlumniMember.email');
+		$tmp['User']['type'] = $this->Session->read('AlumniMember.type');
+		$tmp['User']['passout_class'] = $this->Session->read('AlumniMember.passout_class');
+		$tmp['User']['passout_section'] = $this->Session->read('AlumniMember.passout_section');
+		$tmp['User']['passout_year'] = $this->Session->read('AlumniMember.passout_year');
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+			$data['User']['id'] = $this->Session->read('AlumniMember.id');
+			$errorMsg = $this->validateRegistrationData($data);
+
+			if (empty($errorMsg)) {
+				$response = $this->save_registration_data($data);
+
+				if ($response['success']) {
+					$this->Flash->set('Your profile has been updated successfully.', ['element' => 'success']);
+					$this->redirect('/hss/alumni_member_profile/');
+				}
+
+				$errorMsg = $response['errors'];
+			}
+		} else {
+			$this->data = $tmp;
+		}
+
+		$this->set(compact('errorMsg'));
+	}
+
+	public function registration_payment_details()
+	{
+		$payments = null;
+		$paymentModel = new Payment();
+		$alumniMemberId = $this->Session->read('AlumniMember.id');
+		$conditions = [
+			'Payment.alumni_member_id' => $alumniMemberId,
+			'Payment.type' => 'event_registration_fee',
+		];
+
+		if ($alumniMemberId) {
+			$payments = $paymentModel->find('all', ['conditions' => $conditions]);
+		}
+
+		$this->set(compact('payments'));
+	}
+
+	public function donation_details()
+	{
+		$payments = null;
+		$paymentModel = new Payment();
+		$alumniMemberId = $this->Session->read('AlumniMember.id');
+		$conditions = [
+			'Payment.alumni_member_id' => $alumniMemberId,
+			'Payment.type' => 'donation',
+		];
+
+		if ($alumniMemberId) {
+			$payments = $paymentModel->find('all', ['conditions' => $conditions]);
+		}
+
+		$this->set(compact('payments'));
+	}
 
 	public function register()
 	{
@@ -149,84 +354,471 @@ Thank you for contacting BHEL HSS Alumni. We will get back to you as soon as pos
 
 		if ($this->request->is('post')) {
 			$data = $this->request->data;
-			$response = $this->save_registration_data($data);
+			$this->Session->delete('AlumniMemberRegistration');
+			$this->Session->write('AlumniMemberRegistration.User', $data['User']);
+			$errorMsg = $this->validateRegistrationData($data);
 
-			if ($response['success']) {
-				$this->redirect('/hss/registration_success/');
+			if (empty($errorMsg)) {
+				$otp = rand(1000, 9999);
+				$userName = $data['User']['name'];
+				$userEmail = $data['User']['email'];
+
+				$mailContent = '
+Dear ' . $userName . ',
+<br><br>
+Your registration OTP is <b>' . $otp . '</b>.
+<br><br>
+-<br>
+' . Configure::read('Domain') . '
+<br><br>
+
+*This is a system generated message. Please do not reply.
+
+';
+				$email = new CakeEmail('smtpNoReply');
+				$email->emailFormat('html');
+				$email->to([$userEmail => $userEmail]);
+				$email->subject('Registration OTP - ' . $otp);
+				$email->send($mailContent);
+
+				$this->Session->delete('AlumiMemberRegistrationOTP');
+				$this->Session->write('AlumiMemberRegistrationOTP', $otp);
+
+				$this->Flash->set('An OTP has been sent to your email address ("' . $userEmail . '").
+				Please enter OTP to verify your account.', ['element' => 'notice']);
+
+				$this->redirect('/hss/alumni_member_registration_verification/');
 			}
+		}
 
-			$errorMsg = $response['errors'];
+		if (!empty($errorMsg) && is_array($errorMsg)) {
+			$errorMsg = implode('<br/>', $errorMsg);
 		}
 
 		$this->set(compact('errorMsg'));
 	}
 
-	private function save_registration_data($data) {
-		$alumniMember = new AlumniMember();
-		$errorMsg = array();
-		$response['success'] = false;
-		$response['errors'] = '';
-		$response['memberInfo'] = null;
-		$userId = $data['User']['id'] ?? null;
+	public function alumni_member_registration_verification()
+	{
+		$errorMsg = '';
+		$otp = $this->Session->read('AlumiMemberRegistrationOTP');
+		$alumniMemberData = $this->Session->read('AlumniMemberRegistration');
 
-		// Validations
+		if (empty($otp) || empty($alumniMemberData)) {
+			$this->redirect('/hss/register');
+		}
 
-		// validate user email
-		if(Validation::blank($data['User']['email'])) {
-			$errorMsg[] = 'Enter Email Address.';
-		}
-		elseif(!(Validation::email($data['User']['email']))) {
-			$errorMsg[] = 'Invalid Email Address.';
-		}
-		elseif($userInfo = $alumniMember->findByEmail($this->request->data['User']['email'])) {
-			if ($userInfo['AlumniMember']['id'] != $userId) {
-				$errorMsg[] = 'User with this email address is already registered.';
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+
+			if (Validation::blank($data['User']['otp'])) {
+				$errorMsg = 'Enter OTP.';
+			} elseif ($otp != $data['User']['otp']) {
+				$errorMsg = 'Invalid OTP.';
+			}
+
+			if (empty($errorMsg)) {
+				$response = $this->save_registration_data($alumniMemberData);
+
+				if ($response['success']) {
+					$memberInfo['AlumniMember'] = $response['AlumniMember'];
+					$this->sendRegistrationSuccessEmail($memberInfo);
+					$this->Session->delete('AlumiMemberRegistrationOTP');
+					$this->Session->delete('AlumniMemberRegistration');
+					$this->Session->write('AlumniMember', $response['AlumniMember']);
+					$this->Flash->set('Your profile has been created successfully.', ['element' => 'success']);
+					$this->redirect('/hss/event_registration/');
+				} else {
+					$errorMsg = $response['errors'];
+				}
 			}
 		}
-		if(isset($data['User']['amount_paid'])
-			&& !Validation::blank($data['User']['amount_paid'])
-			&& !Validation::numeric($data['User']['amount_paid'])) {
-			$errorMsg[] = 'Enter Valid Amount.';
-		}
 
-		if(empty($errorMsg)) {
-			$errorMsg = $this->validateData($data);
-			if(empty($errorMsg)) {
-				$data = $this->sanitizeData($data);
+		$this->set(compact('errorMsg', 'alumniMemberData'));
+
+	}
+
+	public function add_member()
+	{
+		$errorMsg = '';
+		$this->layout = 'hss';
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+			$errorMsg = $this->validateRegistrationData($data);
+
+			if (empty($errorMsg)) {
+				$response = $this->save_registration_data($data);
+
+				if ($response['success']) {
+					$this->Flash->set('Member information saved successfully.', ['element' => 'success']);
+					$this->redirect('/hss/alumni_members');
+				} else {
+					$errorMsg = $response['errors'];
+				}
 			}
 		}
 
-		if(!$errorMsg) {
-			$data['AlumniMember'] = $data['User'];
-			$data['AlumniMember']['id'] = $data['User']['id'] ?? null;
+		if (!empty($errorMsg) && is_array($errorMsg)) {
+			$errorMsg = implode('<br/>', $errorMsg);
+		}
 
+		$this->set(compact('errorMsg'));
+	}
 
-			if($alumniMember->save($data)) {
-				$response['success'] = true;
-				$memberInfo = $alumniMember->read();
-				$response['memberInfo'] = $memberInfo;
-				$userName = $memberInfo['AlumniMember']['name'];
-				$userEmail = $memberInfo['AlumniMember']['email'];
+	public function member_details($alumiMemberId)
+	{
+		$errorMsg = '';
+		$this->layout = 'hss';
 
-				$encodedUserID = base64_encode($memberInfo['AlumniMember']['id']);
-				$mailContent = '
-Dear '.$userName.',
+		$alumiMemberModel = new AlumniMember();
+		$alumniMemberInfo = $alumiMemberModel->findById($alumiMemberId);
 
-Your have successfully registered with BHEL HSS Alumni. Thanks for signing up with us.
+		if (empty($alumniMemberInfo)) {
+			$this->Flash->set('Member not found.', ['element' => 'error']);
+			$this->redirect('/hss/alumni_members');
+		}
 
--
-'.Configure::read('Domain').'
+		$user['User'] = $alumniMemberInfo['AlumniMember'];
+		$this->data = $user;
 
+		$this->set(compact('errorMsg'));
+	}
+
+	public function edit_member($alumiMemberId)
+	{
+		$errorMsg = '';
+		$this->layout = 'hss';
+
+		$alumiMemberModel = new AlumniMember();
+
+		$alumniMemberInfo = $alumiMemberModel->findById($alumiMemberId);
+		$paymentVerifiedPreviously = $alumniMemberInfo['AlumniMember']['payment_confirmed'];
+
+		if (empty($alumniMemberInfo)) {
+			$this->Flash->set('Member not found.', ['element' => 'error']);
+			$this->redirect('/hss/alumni_members');
+		}
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+			$data['User']['id'] = $alumiMemberId;
+			$errorMsg = $this->validateRegistrationData($data);
+
+			if (empty($errorMsg)) {
+				$response = $this->save_registration_data($data);
+
+				if ($response['success']) {
+					if (!$paymentVerifiedPreviously && ((bool)$data['User']['payment_confirmed'])) {
+						$mailContent = '
+Dear ' . $alumniMemberInfo['AlumniMember']['name'] . ',
+<br><br>
+Your payment towards Reunion-2024 event has been verified successfully.
+<br><br>
+-<br>
+' . Configure::read('Domain') . '
+<br><br>
 
 *This is a system generated message. Please do not reply.
 
 ';
-				$email = new CakeEmail();
-				$email->from(array('noreply@bhelhss.com' => 'bhelhss.com'));
-				$email->to($userEmail);
-				$email->subject('Registration successful');
-				// $email->send($mailContent); //todo: uncomment if email has to be sent
+						$email = new CakeEmail('smtpNoReply');
+						$email->to($alumniMemberInfo['AlumniMember']['email']);
+						$email->subject('Payment verified successfully');
+						$email->emailFormat('html');
+						$email->send($mailContent);
+					}
 
+					$this->Flash->set('Member information saved successfully.', ['element' => 'success']);
+					$this->redirect('/hss/alumni_members');
+				}
+
+				$errorMsg = $response['errors'];
+			}
+		} else {
+			$user['User'] = $alumniMemberInfo['AlumniMember'];
+			$this->data = $user;
+		}
+
+		$this->set(compact('errorMsg'));
+	}
+
+	public function payments($paymentType = null)
+	{
+		$payments = null;
+		$paymentModel = new Payment();
+		// $alumniMemberId = $this->Session->read('AlumniMember.id');
+		$conditions = [];
+		$download = false;
+
+		if (strtolower($paymentType) == 'download') {
+			$download = true;
+			$paymentType = null;
+			ini_set('max_execution_time', '10000');
+			ini_set('memory_limit', '1024M');
+
+			$fileName = 'Payments-all' . '-' . time() . '.csv';
+			$this->layout = 'ajax';
+
+			$this->response->compress();
+			$this->response->type('csv');
+			$this->response->download($fileName);
+
+		}
+
+		if ($paymentType == 'Event-Fees' || $paymentType == 'Donations') {
+			if ($paymentType == 'Event-Fees') {
+				$type = 'event_registration_fee';
+			}
+			if ($paymentType == 'Donations') {
+				$type = 'donation';
+			}
+			$conditions = [
+				'Payment.type' => $type,
+			];
+		}
+		$payments = $paymentModel->find('all', ['conditions' => $conditions]);
+
+		$this->set(compact('payments', 'paymentType', 'download'));
+	}
+
+	public function member_payments($alumniMemberId)
+	{
+		$payments = null;
+		$alumniMemberModel = new AlumniMember();
+		$alumniMemberInfo = $alumniMemberModel->findById($alumniMemberId);
+
+		if (empty($alumniMemberInfo)) {
+			$this->Flash->set('Member information not found.', ['element' => 'error']);
+			$this->redirect('/hss/alumni_members');
+		}
+
+		$paymentModel = new Payment();
+		// $alumniMemberId = $this->Session->read('AlumniMember.id');
+		$conditions = [
+			'Payment.alumni_member_id' => $alumniMemberId,
+			//'Payment.type' => 'event_registration_fee',
+		];
+
+		if ($alumniMemberId) {
+			$payments = $paymentModel->find('all', ['conditions' => $conditions]);
+		}
+
+		$this->set(compact('alumniMemberInfo', 'payments'));
+	}
+
+	public function update_member_payment($paymentId)
+	{
+		$errorMsg = '';
+		$this->layout = 'hss';
+		$paymentModel = new Payment();
+		$paymentInfo = $paymentModel->findById($paymentId);
+
+		if (empty($paymentInfo)) {
+			$this->Flash->set('Payment information not found.', ['element' => 'error']);
+			$this->redirect('/hss/alumni_members');
+		}
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+
+			if (Validation::blank($data['Payment']['verified_amount'])) {
+				$errorMsg = 'Enter Credited Amount.';
+			} elseif (!Validation::decimal($data['Payment']['verified_amount'])) {
+				$errorMsg = 'Invalid Amount.';
+			}
+
+			if (empty($errorMsg)) {
+				$data['Payment']['id'] = $paymentId;
+				if ($paymentModel->save($data)) {
+					$paymentInfo = $paymentModel->read();
+					$memberId = $paymentInfo['AlumniMember']['id'];
+					$memberName = $paymentInfo['AlumniMember']['name'];
+					$memberEmail = $paymentInfo['AlumniMember']['email'];
+
+					if ($data['Payment']['send_email']) {
+						$logoUrl = Configure::read('DomainUrl') . 'img/hss_logo_email_optimized.png';
+						$associationName = 'BHEL HSS ALUMNI ASSOCIATION';
+						$amount = (float)$paymentInfo['Payment']['verified_amount'];
+						$paymentType = $paymentInfo['Payment']['type'];
+						$body = '';
+
+						$date = date('d-m-Y');
+						$receiptNo = 'E-' . $paymentInfo['Payment']['id'];
+
+						if ($paymentType == 'event_registration_fee') {
+							$body = 'Received with thanks from Mr/Mrs/Ms. ' . $memberName . ', Rs. ' . $amount . '/- towards EUPHORIA-2024, BHEL HSS Alumni reunion event expenses.';
+							$mailContent = '
+Dear ' . $memberName . ',
+<br><br>
+Your payment towards Reunion-2024 event has been verified successfully. Below are your payment details.
+<br><br><br>
+
+<div style="padding: 15px; border-radius: 15px; border: 1px solid grey; background-color: #fbfbfb;">
+	<table>
+	<thead>
+		<tr>
+			<th style="width: 130px;"><img src="' . $logoUrl . '" alt="bhel-hss-logo" style="height:116px; width:120px;"></th>
+			<th style="text-align: left;">' . $associationName . '</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td colspan="2"><br><p>Receipt No.: ' . $receiptNo . '</p></td>
+		</tr>
+		<tr>
+			<td colspan="2">
+				<p>' . $body . '</p>
+			</td>
+		</tr>
+		<tr>
+			<td colspan="2">
+				<p>Date: ' . $date . '</p>
+				<p>Account Manager</p><br>
+				<p><b>Note:</b> As this is a computer generated receipt, signature is not required.</p>
+				<p>Also, please collect the physical copy of receipt on or before the event date, ie: 22-Dec-2024.</p>
+			</td>
+		</tr>
+	</tbody>
+	</table>
+</div>
+<br><br>
+-<br>
+' . Configure::read('Domain') . '
+<br><br>
+
+*This is a system generated message. Please do not reply.
+
+';
+						}
+
+						if ($paymentType == 'donation') {
+							$body = 'Received with thanks from Mr/Mrs/Ms. ' . $memberName . ', Rs. ' . $amount . '/- towards event expenses and developmental purposes of ' . $associationName . '.';
+							$mailContent = '
+Dear ' . $memberName . ',
+<br><br>
+Your donation towards event expenses and development of Alumni community has been verified successfully. Below are your payment details.
+<br><br><br>
+
+<div style="padding: 15px; border-radius: 15px; border: 1px solid grey; background-color: #fbfbfb;">
+	<table>
+	<thead>
+		<tr>
+			<th style="width: 130px;"><img src="' . $logoUrl . '" alt="bhel-hss-logo" style="height:116px; width:120px;"></th>
+			<th style="text-align: left;">' . $associationName . '</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td colspan="2"><br><p>Receipt No.: ' . $receiptNo . '</p></td>
+		</tr>
+		<tr>
+			<td colspan="2">
+				<p>' . $body . '</p>
+			</td>
+		</tr>
+		<tr>
+			<td colspan="2">
+				<p>Date: ' . $date . '</p>
+				<p>Account Manager</p><br>
+				<p><b>Note:</b> As this is a computer generated receipt, signature is not required.</p>
+			</td>
+		</tr>
+	</tbody>
+	</table>
+</div>
+<br><br>
+-<br>
+' . Configure::read('Domain') . '
+<br><br>
+
+*This is a system generated message. Please do not reply.
+
+';
+						}
+
+						$email = new CakeEmail('smtpNoReply');
+						$email->to($memberEmail);
+						//$email->cc(['accounts@bhelhss.com']);
+						$email->cc(['preetham.pawar@gmail.com']);
+						$email->subject('Payment verified successfully');
+						$email->emailFormat('html');
+						$email->send($mailContent);
+					}
+
+					$this->Flash->set('Payment information updated successfully.', ['element' => 'success']);
+					$this->redirect('/hss/member_payments/' . $memberId);
+				}
+
+				$errorMsg = 'Some error occurred. Please try again.';
+			}
+		} else {
+			$user['User'] = $paymentInfo['AlumniMember'];
+			$this->data = $user;
+		}
+
+		$this->set(compact('errorMsg', 'paymentInfo'));
+	}
+
+	private function validateRegistrationData($data)
+	{
+		$alumniMember = new AlumniMember();
+		$errorMsg = array();
+		$userId = $data['User']['id'] ?? null;
+
+		//validate captcha
+		if (isset($data['Image']['captcha'])) {
+			$captcha = $this->Session->read('captcha');
+
+			if ($captcha || empty($data['Image']['captcha'])) {
+				if ($data['Image']['captcha'] != $captcha) {
+					$errorMsg[] = 'Invalid Captcha.';
+				}
+			} else {
+				$errorMsg[] = 'Captcha is empty or not valid.';
+			}
+		}
+
+		// validate user email
+		if (empty($errorMsg)) {
+			if (Validation::blank($data['User']['email'])) {
+				$errorMsg[] = 'Enter Email Address.';
+			} elseif (!(Validation::email($data['User']['email']))) {
+				$errorMsg[] = 'Invalid Email Address.';
+			} elseif ($userInfo = $alumniMember->findByEmail($data['User']['email'])) {
+				if ($userInfo['AlumniMember']['id'] != $userId) {
+					$errorMsg[] = 'User with this Email Address already exists.';
+				}
+			}
+		}
+
+		if (empty($errorMsg)) {
+			$errorMsg = $this->validateData($data);
+		}
+
+		return $errorMsg;
+	}
+
+	private function save_registration_data($data)
+	{
+		$alumniMember = new AlumniMember();
+		$errorMsg = [];
+		$response['success'] = false;
+		$response['errors'] = '';
+		$response['memberInfo'] = null;
+		$errorMsg = $this->validateRegistrationData($data);
+
+		if (empty($errorMsg)) {
+			$data = $this->sanitizeData($data);
+			$data['AlumniMember'] = $data['User'];
+			$data['AlumniMember']['id'] = $data['User']['id'] ?? null;
+			$data['AlumniMember']['account_verified'] = true;
+
+			if ($alumniMember->save($data)) {
+				$memberInfo = $alumniMember->read();
+				$this->Session->write('AlumniMember', $memberInfo['AlumniMember']);
+				$response['success'] = true;
+				$response['AlumniMember'] = $memberInfo['AlumniMember'];
 			} else {
 				$response['errors'] = 'An error occurred while communicating with the server. Please try again.';
 			}
@@ -240,674 +832,243 @@ Your have successfully registered with BHEL HSS Alumni. Thanks for signing up wi
 		return $response;
 	}
 
+	private function sendRegistrationSuccessEmail($alumniMemberInfo)
+	{
+		try {
+			$userName = $alumniMemberInfo['AlumniMember']['name'];
+			$userEmail = $alumniMemberInfo['AlumniMember']['email'];
+
+			$mailContent = '
+Dear ' . $userName . ',
+<br><br>
+You have successfully registered with BHEL HSS Alumni. Thanks for signing up with us.
+<br><br>
+-<br>
+' . Configure::read('Domain') . '
+<br><br>
+
+*This is a system generated message. Please do not reply.
+
+';
+			$email = new CakeEmail('smtpNoReply');
+			$email->to($userEmail);
+			$email->subject('Registration successful');
+			$email->emailFormat('html');
+			$email->send($mailContent);
+
+			return true;
+		} catch (Exception $e) {
+
+		}
+
+		return false;
+	}
+
+
+	public function event_registration()
+	{
+		$memberInfo['AlumniMember'] = $this->Session->read('AlumniMember');
+
+		if (!$memberInfo) {
+			$this->redirect('/');
+		}
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+			$donationAmount = (float)($data['Donation']['paid_amount'] ?? 0);
+
+			if (empty($data['Payment']['transaction_id']) && empty($data['Payment']['screenshot']['name'])) {
+				$this->Flash->set('Please enter transaction UTR ID (or) Upload the payment receipt.', ['element' => 'error']);
+			} else {
+				$filename = '';
+
+				if (!empty($data['Payment']['screenshot']['name'])) {
+					$filename = $memberInfo['AlumniMember']['id'] .
+						'_' . time() .
+						'_' .
+						basename($this->request->data['Payment']['screenshot']['name']);
+					move_uploaded_file(
+						$this->data['Payment']['screenshot']['tmp_name'],
+						WWW_ROOT . DS . 'payments' . DS . $filename
+					);
+				}
+
+
+				$paymentModel = new Payment();
+				$data['Payment']['alumni_member_id'] = $memberInfo['AlumniMember']['id'];
+				$data['Payment']['transaction_file'] = $filename;
+				$paymentModel->save($data);
+
+				if ($donationAmount > 0) {
+					$eventFeePaymentInfo = $paymentModel->read();
+
+					$tmp['Payment']['id'] = null;
+					$tmp['Payment']['alumni_member_id'] = $eventFeePaymentInfo['AlumniMember']['id'];
+					$tmp['Payment']['transaction_file'] = $eventFeePaymentInfo['Payment']['transaction_file'];;
+					$tmp['Payment']['transaction_id'] = $eventFeePaymentInfo['Payment']['transaction_id'];
+					$tmp['Payment']['parent_id'] = $eventFeePaymentInfo['Payment']['id'];
+					$tmp['Payment']['paid_amount'] = (float)$data['Donation']['paid_amount'];
+					$tmp['Payment']['type'] = 'donation';
+
+					$paymentModel = new Payment();
+					$paymentModel->save($tmp);
+				}
+
+				$this->Flash->set('Transaction details have been saved successfully.', ['element' => 'success']);
+				$this->redirect('/hss/registration_success/');
+			}
+		}
+
+		$this->set(compact('memberInfo'));
+	}
+
 	public function registration_success()
 	{
+		$memberInfo = $this->Session->read('AlumniMember');
 
-	}
-
-	public function login() {
-		$this->set('title_for_layout', 'Log In');
+		if (!$memberInfo) {
+			$this->redirect('/');
+		}
 
 		if ($this->request->is('post')) {
-			if ($this->Auth->login()) {
+			$data = $this->request->data;
+			//debug($data);
+			exit;
+		}
 
-				$userInfo = $this->Auth->user();
-				if(!$userInfo['registered']) {
-					$encodedUserID = base64_encode($userInfo['id']);
-					$this->sendConfirmationLink($encodedUserID);
-					$this->Session->setFlash('Your account is not confirmed yet. A confirmation link has been sent to your email address.', 'default', array('class'=>'notice'));
-					$this->redirect('/users/login');
-				}
-
-				if(!$userInfo['active']) {
-					$this->Session->setFlash('Your account is blocked/inactive. Please contact the site administrator or email the issue to support@bhelhss.com', 'default', array('class'=>'error'));
-					$this->redirect('/users/login');
-				}
+		$this->set(compact('memberInfo'));
+	}
 
 
-				App::uses('PrivacySetting', 'Model');
-				$this->PrivacySetting = new PrivacySetting;
-				$pSettings = $this->PrivacySetting->findByUserId($userInfo['id']);
+	public function donations()
+	{
+		$memberInfo['AlumniMember'] = $this->Session->read('AlumniMember');
 
-				$this->Session->write('PrivacySetting', $pSettings['PrivacySetting']);
-				$this->Session->write('User', $userInfo);
-				$this->Session->write('User.login', '1');
-				$this->redirect($this->Auth->redirectUrl());
+		if (!$memberInfo) {
+			$this->redirect('/');
+		}
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+
+			if (empty($data['Payment']['transaction_id']) && empty($data['Payment']['screenshot']['name'])) {
+				$this->Flash->set('Please enter transaction UTR ID (or) Upload the payment receipt.', ['element' => 'error']);
 			} else {
-				$this->set('errorMsg', 'Invalid email address or password. Please try again');
-			}
-		}
-	}
+				$filename = '';
 
-	function admin_login() {
-		$this->redirect('/users/login');
-	}
-
-	function admin_logout() {
-		$this->redirect('/users/logout');
-	}
-
-	public function logout() {
-		$this->Session->delete('User');
-		$this->Session->delete('Company');
-		$this->Session->delete('UserCompany');
-		$this->Session->destroy();
-		$this->redirect($this->Auth->logout());
-	}
-
-    public function index() {
-		//$users = $this->User->find('all');
-
-
-		$conditions = array('UserCompany.company_id'=>$this->Session->read('Company.id'));
-		$users = $this->User->UserCompany->find('all', array('conditions'=>$conditions, 'order'=>array('UserCompany.created')));
-
-		$this->set('users', $users);
-    }
-
-	/**
-	 * Function to edit user profile
-	 */
-	public function edit($userID) {
-		App::uses('Company', 'Model');
-		$this->Company = new Company;
-		if($this->Session->read('UserCompany.user_level') == '4') {
-			$this->set('companies', $this->Company->find('list'));
-		}
-		else{
-			$this->set('companies', $this->Company->find('list', array('conditions'=>array('Company.id'=>$this->Session->read('Company.id')))));
-		}
-
-		$errorMsg = null;
-		$userInfo = $this->User->find('first', array('conditions'=>array('User.id'=>$userID)));
-
-		if(empty($userInfo)) {
-			$this->Session->setFlash('User not found', 'default', array('class'=>'error'));
-			$this->redirect('/users/');
-		}
-
-		if($this->request->is('put')) {
-			$data = $this->request->data;
-			// validations
-			$errorMsg = null;
-			if(Validation::blank($data['User']['name'])) {
-				$errorMsg = 'Enter Name';
-			}
-			elseif(!(Validation::between($data['User']['name'], 3, 55))) {
-				$errorMsg = 'Name should be 3 to 55 characters long';
-			}
-			elseif($this->User->find('first', array('conditions'=>array('User.email'=>$data['User']['email'], 'User.id NOT'=>$userID)))) {
-				$errorMsg = 'User with this email address is already registered with us';
-			}
-			if(!$errorMsg) {
-				$data['User']['id'] = $userID;
-				if ($this->User->save($data)) {
-					$this->Session->setFlash('Account Updated Successfully', 'default', array('class'=>'success'));
-					$this->redirect(array('action' => 'index'));
+				if (!empty($data['Payment']['screenshot']['name'])) {
+					$filename = $memberInfo['AlumniMember']['id'] .
+						'_' . time() .
+						'_' .
+						basename($this->request->data['Payment']['screenshot']['name']);
+					move_uploaded_file(
+						$this->data['Payment']['screenshot']['tmp_name'],
+						WWW_ROOT . DS . 'payments' . DS . $filename
+					);
 				}
-				else {
-					$this->Session->setFlash('An error occurred while communicating with the server', 'default', array('class'=>'error'));
-				}
+
+				$paymentModel = new Payment();
+				$data['Payment']['alumni_member_id'] = $memberInfo['AlumniMember']['id'];
+				$data['Payment']['transaction_file'] = $filename;
+				$paymentModel->save($data);
+
+				$this->Flash->set('Transaction details have been saved successfully.', ['element' => 'success']);
+				$this->redirect('/hss/donation_success/');
 			}
 		}
-		else {
-			$this->data = $userInfo;
-		}
-		$this->set('errorMsg', $errorMsg);
-		$this->set('userInfo', $userInfo);
+
+		$this->set(compact('memberInfo'));
 	}
 
-	/**
-	 * Function to request code for password reset
-	 */
-	public function forgotpassword() {
-		$this->set('title_for_layout', 'Forgot your password?');
+	public function donation_success()
+	{
+		$memberInfo = $this->Session->read('AlumniMember');
+
+		if (!$memberInfo) {
+			$this->redirect('/');
+		}
 
 		if ($this->request->is('post')) {
-
 			$data = $this->request->data;
-
-			$errorMsg = null;
-			$err = false;
-
-			if(empty($data['User']['email'])){
-				$errorMsg = 'Enter Email Address';
-				$err = true;
-			}
-			if($err){
-				$this->set('errorMsg',$errorMsg);
-			}else{
-				$email  = $data['User']['email'];
-				$user = $this->User->findByEmail($email);
-
-				if(!$user){
-					$this->Session->setFlash('Account not found.', 'default', array('class'=>'error'));
-				}
-				else{
-					$randomPass = $this->generatePassword(4);
-					$this->Session->write('verification_code', $randomPass);
-					$this->Session->write('verification_email', $email);
-
-					try {
-						$mailContent = '
-Dear '.$user['User']['name'].',
-
-You have requested to reset your password.
-
-Below is the verification code, which is needed to reset your password.
-
-Verification Code: '.$randomPass.'
-
-
--
-'.Configure::read('Domain').'
-
-
-*This is a system generated message. Please do not reply.
-						';
-
-						// send verification code in email
-						$email = new CakeEmail();
-						$email->from(array('noreply@bhelhss.com' => 'bhelhss.com'));
-						$email->to($user['User']['email']);
-						$email->subject('Password Reset');
-						$email->send($mailContent);
-					}
-					catch(Exception $ex) {
-					}
-
-					$this->Session->setFlash('Verification Code has been sent to your Email Address.', 'default', array('class'=>'success'));
-					$this->redirect('/users/resetpassword');
-				}
-			}
+			//debug($data);
+			exit;
 		}
 
+		$this->set(compact('memberInfo'));
 	}
 
-	public function resetpassword() {
-		$this->set('title_for_layout', 'Reset your password');
-		if(!$this->Session->check('verification_code')) {
-			$this->Session->setFlash('Your session has expired. Please try again.', 'default', array('class'=>'error'));
-			$this->redirect('/users/forgotpassword');
-		}
+	public function getcaptcha()
+	{
+		$this->layout = false;
+		// Generate a random number
+		// from 1000-9999
+		$captcha = rand(1000, 9999);
 
-		$errorMsg = null;
-		if ($this->request->is('post')) {
-			$data = $this->request->data;
-			if(empty($data['User']['verification_code'])) {
-				$errorMsg = 'Enter Verification Code';
-			}
-			else {
-				if($this->data['User']['verification_code'] == $this->Session->read('verification_code')) {
-					$email = $this->Session->read('verification_email');
-					$user = $this->User->findByEmail($email);
-					if(!empty($user)) {
-						$randomPass = $this->generatePassword();
-
-						$tmp['User']['id'] = $user['User']['id'];
-						$tmp['User']['password'] = md5($randomPass);
-						if($this->User->save($tmp)) {
-							try {
-								$mailContent = '
-Dear '.$user['User']['name'].',
-
-Your password has been reset. Below are your login credentials.
-
-Email: '.$email.'
-Password: '.$randomPass.'
-
-
--
-'.Configure::read('Domain').'
-
-
-*This is a system generated message. Please do not reply.
-								';
-
-								// send login credentials in email
-								$email = new CakeEmail();
-								$email->from(array('noreply@bhelhss.com' => 'bhelhss.com'));
-								$email->to($user['User']['email']);
-								$email->subject('Your New Password');
-								$email->send($mailContent);
-							}
-							catch(Exception $ex) {
-							}
-							$this->Session->delete('verification_code');
-							$this->Session->delete('verification_email');
-
-							$this->Session->setFlash('Your password has been reset. Login details have been sent to your email address. Please check your Email.', 'default', array('class'=>'success'));
-							$this->redirect('/users/login');
-						}
-					}
-					else {
-						$errorMsg = 'Account Not Found';
-					}
-				}
-				else {
-					$errorMsg = 'Invalid Verification Code';
-				}
-			}
+		// The captcha will be stored
+		// for the session
+		$this->Session->write('captcha', $captcha);
+		$tmp = str_split($captcha);
+		$chars = ['', ' ', '  ', '   ', '    '];
+		$captcha = '';
+		foreach ($tmp as $char) {
+			$randomCharIndex = rand(0, (count($chars) - 1));
+			$randomChar = $chars[$randomCharIndex];
+			$captcha .= $char . ' ' . $randomChar;
 
 		}
-		$this->set('errorMsg', $errorMsg);
+
+		// Generate a 50x24 standard captcha image
+		$im = imagecreatetruecolor(300, 75);
+
+		// color
+		$bg = imagecolorallocate($im, 100, 100, 100);
+
+		// White color
+		$fg = imagecolorallocate($im, 255, 255, 255);
+
+		// Give the image a blue background
+		imagefill($im, 0, 0, $bg);
+
+		// Print the captcha text in the image
+		// with random position & size
+		imagestring($im, rand(4, 5), rand(5, 130),
+			rand(5, 50), $captcha, $fg);
+
+		// VERY IMPORTANT: Prevent any Browser Cache!!
+		header("Cache-Control: no-store, no-cache, must-revalidate");
+
+		// The PHP-file will be rendered as image
+		header('Content-type: image/png');
+
+		// Finally output the captcha as
+		// PNG image the browser
+		imagepng($im);
+
+		// Free memory
+		imagedestroy($im);
+
+		exit;
 	}
 
-	/**
-	 * Function to genereate random password
-	 */
-	function generatePassword ($length = 8) {
-        // inicializa variables
-        $password = "";
-        $i = 0;
-        $possible = "0123456789bcdfghjkmnpqrstvwxyz";
-
-        // agrega random
-        while ($i < $length){
-            $char = substr($possible, mt_rand(0, strlen($possible)-1), 1);
-
-            if (!strstr($password, $char)) {
-                $password .= $char;
-                $i++;
-            }
-        }
-        return $password;
-    }
-
-	/**
-	 * Function to change password
-	 */
-	function changepassword() {
-		$this->set('title_for_layout', 'Change your password');
-		$errorMsg = '';
-		if($this->request->ispost()) {
-			$oldPwd = $this->request->data['User']['password'];
-			$oldPwd = AuthComponent::password($oldPwd);
-			$conditions = array('User.id'=>$this->Session->read('User.id'), 'User.password'=>$oldPwd);
-			$userInfo = $this->User->find('first', array('conditions'=>$conditions, 'recursive'=>'-1'));
-
-			if(!empty($userInfo)) {
-				$newPwd = $this->request->data['User']['new_password'];
-				$confirmPwd = $this->request->data['User']['confirm_password'];
-
-				if(!(Validation::equalTo($newPwd, $confirmPwd))) {
-					$errorMsg = 'New Password and Confirm Password do not match';
-				}
-				else {
-					$this->User->id = $userInfo['User']['id'];
-					$this->User->set('password',  AuthComponent::password($newPwd));
-					$this->User->save();
-					$this->Session->setFlash('Password has been changed successfully', 'default', array('class'=>'success'));
-					$this->redirect('/users/changepassword');
-				}
-			}
-			else{
-				$errorMsg = 'Incorrect Old Password';
-			}
-		}
-
-
-		$this->set('errorMsg', $errorMsg);
-	}
-
-	/**
-	 * Function to register a user
-	 */
-	function register_() {
-		$this->set('title_for_layout', 'Register Your Account');
-		if ($this->request->is('post')) {
-			$data = $this->request->data;
-			$errorMsg = array();
-
-			// Validations
-
-			// validate user email
-			if(Validation::blank($data['User']['email'])) {
-				$errorMsg[] = 'Enter Email Address';
-			}
-			elseif(!(Validation::email($data['User']['email']))) {
-				$errorMsg[] = 'Invalid Email Address';
-			}
-			elseif($this->User->findByEmail($this->request->data['User']['email'])) {
-				$errorMsg[] = 'User with this email address is already registered with us';
-			}
-
-
-			// validate password
-			elseif(Validation::blank($data['User']['password'])) {
-				$errorMsg[] = 'Enter Password';
-			}
-			elseif(Validation::blank($data['User']['confirm_password'])) {
-				$errorMsg[] = 'Confirm Password field is empty';
-			}
-			elseif($data['User']['confirm_password'] != $data['User']['password']) {
-				$errorMsg[] = 'Passwords do not match';
-			}
-
-			if(empty($errorMsg)) {
-				$errorMsg = $this->validateData($data);
-				if(empty($errorMsg)) {
-					$data = $this->sanitizeData($data);
-				}
-			}
-
-			if(!$errorMsg) {
-				// unset($data['User']['confirm_password']);
-				$data['User']['id'] = null;
-				$password = $data['User']['password'];
-				if($this->User->save($data)) {
-					$userInfo = $this->User->read();
-
-					$tmp = array();
-					$tmp['Activity']['type'] = 'user_registration';
-					$tmp['Activity']['title'] = 'New User';
-					$tmp['Activity']['user_id'] = $userInfo['User']['id'];
-					$tmp['Activity']['url'] = '/users/info/'.$userInfo['User']['id'];
-					$this->saveActivity($tmp);
-
-					App::uses('PrivacySetting', 'Model');
-					$this->PrivacySetting = new PrivacySetting;
-					$pData['PrivacySetting']['id'] = ($this->Session->check('PrivacySetting')) ? $this->Session->read('PrivacySetting') : null;
-					$pData['PrivacySetting']['user_id'] = $userInfo['User']['id'];
-					$this->PrivacySetting->save($pData);
-
-					$encodedUserID = base64_encode($userInfo['User']['id']);
-					$this->sendConfirmationLink($encodedUserID, $password);
-					$this->Session->setFlash('You have successfully registered with bhelhss.com', 'default', array('class'=>'success'));
-					$this->redirect('/pages/registration_success');
-				}
-				else {
-					$this->Session->setFlash('An error occurred while communicating with the server. Please try again.', 'default', array('class'=>'error'));
-				}
-			}
-			$errorMsg = implode('<br/>', $errorMsg);
-			$this->set(compact('errorMsg'));
-
-		}
-	}
-
-	/**
-	 * Function to send a account confirmation link to the user being registered
-	 */
-	function sendConfirmationLink($encodedUserID, $password=null) {
-		try {
-			$userID = base64_decode($encodedUserID);
-			$userInfo = $this->User->findById($userID);
-			$linkPath = Configure::read('DomainUrl').'users/confirm/'.$encodedUserID;
-			//$hyperLink = '<a href="'.$linkPath.'">'.$linkPath.'</a>';
-			$pwd = ($password) ? $password : '***** (not shown for security reasons)';
-			if(!empty($userInfo)) {
-
-				$mailContent = '
-Dear User,
-
-Your account has been successfully created. Before you start using your account, you need to confirm it.
-
-Click the below link to confirm your account.
-'.$linkPath.'
-
-If the above link doesnt work for you, then copy paste the same in the address bar.
-
-Below are your login details
-	Email: '.$userInfo['User']['email'].'
-	Password: '.$pwd.'
-
-
-Thank you!.
-
--
-'.Configure::read('Domain').'
-
-
-*This is a system generated message. Please do not reply.
-
-';
-				$email = new CakeEmail();
-				$email->from(array('noreply@bhelhss.com' => 'bhelhss.com'));
-				$email->to($userInfo['User']['email']);
-				$email->subject('Registration');
-				$email->send($mailContent);
-
-				// send message to support team
-				$mailContent = '
-Dear Admin,
-
-'.
-$userInfo['User']['name'].'('.$userInfo['User']['email'].') has registered on bhelhss.com.
-
-This message is for notification purpose only.
-
--
-'.Configure::read('Domain').'
-*This is a system generated message. Please do not reply.
-
-';
-				$supportEmail = Configure::read('SupportEmail');
-				$supportEmail2 = Configure::read('SupportEmail2');
-				$email = new CakeEmail();
-				$email->from(array('noreply@bhelhss.com' => 'bhelhss.com'));
-				$email->to($supportEmail);
-				$email->bcc($supportEmail2);
-				$email->subject('New Registration');
-				$email->send($mailContent);
-			}
-		}
-		catch(Exception $ex) {
-
-		}
-	}
-
-	/**
-	 * Function to confirm a user's account
-	 */
-	function confirm($encodedUserID) {
-		$userID = base64_decode($encodedUserID);
-		if($userInfo = $this->User->findById($userID)) {
-			if($userInfo['User']['registered']) {
-				$this->Session->setFlash('Your account has been already confirmed.', 'default', array('class'=>'notice'));
-				$this->redirect('/');
-			}
-
-			$data['User']['id'] = $userID;
-			$data['User']['registered'] = '1';
-			if($this->User->save($data)) {
-
-				$messageType = 'notification';
-				$subject = 'New memeber on bhelhss.com';
-
-				$message = '
-'.$userInfo['User']['name'].' ('.Configure::read('UserTypes.'.$userInfo['User']['type']).') has registered on bhelhss.com.
-
-For more details visit:
-http://www.bhelhss.com/users/info/'.$userInfo['User']['id'].'
-
-Unsubscribe from the mailing list:
-http://www.bhelhss.com/users/subscribe
-
-
--
-bhelhss.com
-support@bhelhss.com
-
-This message is for notification purpose only and is auto generated. Please do not reply.
-
-';
-
-				try {
-					$this->sendBulkEmail($messageType, $subject, $message);
-				}
-				catch(Exception $e) {
-
-				}
-
-				$this->Session->destroy();
-
-				$this->Session->setFlash('Your account has been confirmed. Please login to continue', 'default', array('class'=>'success'));
-				$this->redirect('/users/login');
-			}
-			else {
-				$this->Session->setFlash('An error occurred while communicating with the server. Please try again.', 'default', array('class'=>'error'));
-			}
-		}
-		else {
-			$this->Session->setFlash('Unknown user', 'default', array('class'=>'error'));
-		}
-		$this->redirect('/');
-	}
-
-	/**
-	 * Function to remove a user from the selected company
-	 */
-	function remove($userID=0) {
-
-		$conditions = array('UserCompany.user_id'=>$userID, 'UserCompany.company_id'=>$this->Session->read('Company.id'));
-		App::uses('UserCompany', 'Model');
-		$this->UserCompany = new UserCompany;
-
-		$this->UserCompany = new UserCompany();
-		if($companyInfo = $this->UserCompany->find('first', array('conditions'=>$conditions))) {
-			$this->UserCompany->delete($companyInfo['UserCompany']['id']);
-			$this->Session->setFlash('User has been successfully removed', 'default', array('class'=>'success'));
-		}
-		else {
-			$this->Session->setFlash('You are not authorized to perform this action [Restricted Access]', 'default', array('class'=>'error'));
-		}
-		$this->redirect('/users/');
-	}
-
-	/**
-	 * Show all registered users
-	 */
-	function admin_index() {
-		$this->User->recursive = -1;
-		$users = $this->User->find('all');
-		$totalUsers = $this->User->find('count');
-		$activeUsers = $this->User->find('count', array('conditions'=>array('active'=>'1')));
-		$inactiveUsers = $this->User->find('count', array('conditions'=>array('active NOT'=>'1')));
-		$notRegisteredUsers = $this->User->find('count', array('conditions'=>array('registered NOT'=>'1')));
-
-		$this->set(compact('users', 'totalUsers', 'activeUsers', 'inactiveUsers', 'notRegisteredUsers'));
-	}
-
-	/**
-	 * Function to edit a user
-	 */
-	public function admin_edit($userID) {
-		$this->set('userID', $userID);
-		$errorMsg = null;
-		$userInfo = $this->User->find('first', array('conditions'=>array('User.id'=>$userID), 'recursive'=>2));
-
-		if(empty($userInfo)) {
-			$this->Session->setFlash('User not found', 'default', array('class'=>'message'));
-			$this->redirect('/admin/users/');
-		}
-
-		if($this->request->is('put')) {
-			$data = $this->request->data;
-			// validations
-			$errorMsg = null;
-			if(Validation::blank($data['User']['name'])) {
-				$errorMsg = 'Enter Name';
-			}
-			elseif(!(Validation::between($data['User']['name'], 3, 55))) {
-				$errorMsg = 'Name should be 3 to 55 characters long';
-			}
-			elseif($this->User->find('first', array('conditions'=>array('User.email'=>$data['User']['email'], 'User.id NOT'=>$userID)))) {
-				$errorMsg = 'User with this email address is already registered with us';
-			}
-			if(!$errorMsg) {
-				$data['User']['id'] = $userID;
-				if ($this->User->save($data)) {
-					$this->Session->setFlash('Account Updated Successfully', 'default', array('class'=>'success'));
-					$this->redirect('/admin/users/');
-				}
-				else {
-					$this->Session->setFlash('An error occurred while communicating with the server', 'default', array('class'=>'error'));
-				}
-			}
-		}
-		else {
-			$this->data = $userInfo;
-		}
-		$this->set('errorMsg', $errorMsg);
-		$this->set('userInfo', $userInfo);
-	}
-
-	function createProfile() {
-		$this->set('title_for_layout', 'Create Profile');
-		$errorMsg = array();
-		if($this->request->isPut()) {
-			$data = $this->request->data;
-			$data['User']['id'] = $this->Session->read('User.id');
-			$data['User']['type'] = $this->Session->read('User.type');
-			$errorMsg = $this->validateData($data);
-
-			if(!$errorMsg) {
-				$data['User']['has_completed_profile'] = true;
-				$data = $this->sanitizeData($data);
-
-				if($this->User->save($data)) {
-					$userInfo = $this->User->read();
-					if(!empty($data['Image']['file']['name'])) {
-						// upload user image
-						$results = $this->uploadImage($data);
-						if($results['errorMsg']) {
-							$errorMsg = $results['errorMsg'];
-							$this->Session->setFlash('Image could not be uploaded: '.$errorMsg, 'default', array('class'=>'error'));
-							$userInfo = $this->User->read();
-							$this->Session->write('User', $userInfo['User']);
-							$this->redirect('/users/editProfile');
-						}
-						else {
-							$imageID = $results['imageID'];
-							$tmp['User']['id'] = $userInfo['User']['id'];
-							$tmp['User']['image_id'] = $imageID;
-							$this->User->save($tmp);
-							$userInfo = $this->User->read();
-						}
-					}
-					$this->Session->write('User', $userInfo['User']);
-
-					if($this->Session->read('User.type') == 'student') {
-						$this->Session->setFlash('Congratulations! Your profile has been created.', 'default', array('class'=>'success'));
-						// $this->redirect('/schoolclasses/classInfo');
-						$this->redirect('/users/viewProfile');
-					}
-					else {
-						$this->Session->setFlash('Congratulations! Your profile has been created.', 'default', array('class'=>'success'));
-						$this->redirect('/users/viewProfile');
-					}
-				}
-				else {
-					$errorMsg[] = 'An error occurred while communicating with the server';
-				}
-			}
-		}
-		else {
-			$userInfo['User'] = $this->Session->read('User');
-			$this->data = $userInfo;
-		}
-		$errorMsg = implode('<br>', $errorMsg);
-		$this->set(compact('errorMsg'));
-	}
-
-	function validateData($data) {
+	private function validateData($data)
+	{
 		$errorMsg = array();
 
-		if(Validation::blank($data['User']['type'])) {
+		if (Validation::blank($data['User']['type'])) {
 			$errorMsg[] = 'Select Member Type';
 		}
-		if(Validation::blank($data['User']['name'])) {
+		if (Validation::blank($data['User']['name'])) {
 			$errorMsg[] = 'Enter Name';
 		}
-		if(Validation::blank($data['User']['phone'])) {
+		if (Validation::blank($data['User']['phone'])) {
 			$errorMsg[] = 'Enter Phone Number';
 		}
 
 		return $errorMsg;
 	}
 
-	function sanitizeData($data) {
+	private function sanitizeData($data)
+	{
 		// Initialize & Sanitize data
 		$data['User']['name'] = (isset($data['User']['name'])) ? htmlentities($data['User']['name'], ENT_QUOTES) : null;
 		$data['User']['phone'] = (isset($data['User']['phone'])) ? htmlentities($data['User']['phone'], ENT_QUOTES) : null;
@@ -924,452 +1085,134 @@ This message is for notification purpose only and is auto generated. Please do n
 		$data['User']['service_start_year'] = (isset($data['User']['service_start_year'])) ? $data['User']['service_start_year'] : null;
 		$data['User']['service_end_year'] = (isset($data['User']['service_end_year'])) ? $data['User']['service_end_year'] : null;
 		$data['User']['current_profession'] = (isset($data['User']['current_profession'])) ? htmlentities($data['User']['current_profession'], ENT_QUOTES) : null;
-		//$data['User']['amount_paid'] = (isset($data['User']['amount_paid'])) ? ((float)$data['User']['amount_paid']) : 0;
 
 		return $data;
 	}
 
-	function viewProfile($userID = null) {
-		$this->set('title_for_layout', 'My Profile');
-		$userInfo['User'] = $this->Session->read('User');
-
-
-		$this->set(compact('userInfo'));
-	}
-
-
-	function editProfile($userID = null) {
-		$this->set('title_for_layout', 'Create Profile');
-
-		$userInfo['User'] = $this->Session->read('User');
-		$method = $this->request->isPut();
-		if(!empty($userID)) {
-			$method = $this->request->isPut();
-			$userInfo = $this->User->findById($userID);
-			if(empty($userInfo)) {
-				$this->Session->setFlash('Profile not found', 'default', array('class'=>'error'));
-				$this->redirect('/');
-			}
-		}
-
-		$errorMsg = array();
-		if($method) {
-			$data = $this->request->data;
-			$data['User']['id'] = $userInfo['User']['id'];
-			$data['User']['type'] = $userInfo['User']['type'];
-
-			$errorMsg = $this->validateData($data);
-
-			if(!$errorMsg) {
-				$data = $this->sanitizeData($data);
-
-				if($this->User->save($data)) {
-					$userInfo = $this->User->read();
-
-					// upload user image
-					if(!empty($data['Image']['file']['name'])) {
-						$results = $this->uploadImage($data);
-						if($results['errorMsg']) {
-							$errorMsg = $results['errorMsg'];
-							$this->Session->setFlash('Image could not be uploaded: '.$errorMsg, 'default', array('class'=>'error'));
-							$this->redirect('/users/editProfile');
-						}
-						else {
-							$imageID = $results['imageID'];
-							$tmp['User']['id'] = $userInfo['User']['id'];
-							$tmp['User']['image_id'] = $imageID;
-							$this->User->save($tmp);
-							$userInfo = $this->User->read();
-						}
-					}
-
-					$this->Session->write('User', $userInfo['User']);
-
-					if($this->Session->read('User.type') == 'student') {
-						$this->Session->setFlash('Your profile has been modified.', 'default', array('class'=>'success'));
-						$this->redirect('/users/viewProfile');
-						// $this->redirect('/schoolclasses/classInfo');
-					}
-					else {
-						$this->Session->setFlash('Your profile has been modified.', 'default', array('class'=>'success'));
-						$this->redirect('/users/viewProfile');
-					}
-				}
-				else {
-					$errorMsg[] = 'An error occurred while communicating with the server';
-				}
-			}
-		}
-		else {
-			$this->data = $userInfo;
-		}
-		$errorMsg = implode('<br>', $errorMsg);
-		$this->set(compact('errorMsg', 'userInfo'));
-	}
-
-	function changePrivacySettings() {
-		$this->set('title_for_layout', 'Privacy Settings');
-
-		$userID = $this->Session->read('User.id');
-
-		App::uses('PrivacySetting', 'Model');
-		$this->PrivacySetting = new PrivacySetting;
-		$pSettings = $this->PrivacySetting->findByUserId($userID);
-		if(empty($pSettings)) {
-			$this->Session->setFlash('Privacy settings not found for this profile', 'default', array('class'=>'error'));
-			$this->redirect('/users/viewProfile');
-		}
-
-		$errorMsg = array();
-		if($this->request->isPost()) {
-			$data = $this->request->data;
-			$data['PrivacySetting']['id'] = $pSettings['PrivacySetting']['id'];
-			if($this->PrivacySetting->save($data)) {
-				$tmp = $this->PrivacySetting->read();
-				$this->Session->write('PrivacySetting', $tmp['PrivacySetting']);
-				$this->Session->setFlash('Your privacy settings have been changed.', 'default', array('class'=>'success'));
-				$this->redirect('/users/viewProfile');
-			}
-			else {
-				$this->Session->setFlash('An error occurred while communicating with the server', 'default', array('class'=>'success'));
-				$errorMsg[] = 'An error occurred while communicating with the server';
-			}
-		}
-		$this->data = $pSettings;
-		$errorMsg = implode('<br>', $errorMsg);
-		$this->set(compact('errorMsg', 'pSettings'));
-	}
-
-	function contactus() {
-		$errorMsg = array();
-		if ($this->request->is('post')) {
-			$data = $this->request->data;
-
-			if(!$this->Session->check('User')) {
-				// Validate name
-				if(Validation::blank($data['User']['name'])) {
-					$errorMsg[] = 'Enter your name';
-				}
-
-				// validate user email
-				if(Validation::blank($data['User']['email'])) {
-					$errorMsg[] = 'Enter Email Address';
-				}
-				elseif(!(Validation::email($data['User']['email']))) {
-					$errorMsg[] = 'Invalid Email Address';
-				}
-			}
-			else {
-				$data['User']['name'] = $this->Session->read('User.name');
-				$data['User']['email'] = $this->Session->read('User.email');
-			}
-			// Validate message
-			if(Validation::blank($data['User']['message'])) {
-				$errorMsg[] = 'Message field cannot be empty';
-			}
-
-			if(empty($errorMsg)) {
-				try {
-					$mailContent = '
-Dear Admin,
-
-A person has tried to contact you on '.Configure::read('Domain').'.
-
-Contact Details:
-----------------------------------------
-Name: '.$data['User']['name'].'
-Email: '.$data['User']['email'].'
-Message: '.$data['User']['message'].'
-
-
--
-'.Configure::read('Domain').'
-
-*This is a system generated message. Please do not reply.
-
-';
-					$supportEmail = Configure::read('SupportEmail');
-					$supportEmail2 = Configure::read('SupportEmail2');
-					$email = new CakeEmail();
-					$email->from(array('noreply@bhelhss.com' => 'bhelhss.com'));
-					$email->replyTo(array($data['User']['email'] => $data['User']['name']));
-					$email->to($supportEmail);
-					$email->bcc($supportEmail2);
-					$email->subject('Contact Us');
-					$email->send($mailContent);
-
-					$this->Session->setFlash('Your message has been sent successfully.', 'default', array('class'=>'success'));
-					$this->redirect('/pages/contactus_message_sent');
-				}
-				catch(Exception $ex) {
-					$this->Session->setFlash('An error occurred while communicating with the server. Please try again.', 'default', array('class'=>'error'));
-				}
-			}
-		}
-		$errorMsg = implode('<br>', $errorMsg);
-		$this->set('errorMsg', $errorMsg);
-		$this->set('title_for_layout', 'Contact Us');
-	}
-
-	function uploadImage($data) {
-		$status = array();
-		$imageID = null;
-		$errorMsg = null;
-
-		// upload image
-		if(!empty($data['Image']['file']['name']))
-		{
-			if(!$this->isValidImageSize($data['Image']['file']['size'])) {
-				$errorMsg =  'Image size exceeded '.Configure::read('MaxImageSize').'Mb limit';
-			}
-			elseif(!$this->isValidImage($data['Image']['file'])) {
-				$errorMsg = 'Not a valid image';
-			}
-			else {
-				App::import('Controller', 'Images');
-				$Images = new ImagesController;
-				$Images->constructClasses();
-				$imageID = $Images->uploadImage($data['Image']['file']);
-				$tmp['Image']['id'] = $imageID;
-				$tmp['Image']['uploaded_by'] = $this->Session->read('User.id');
-				App::uses('Image', 'Model');
-				$this->Image = new Image;
-				if(!$this->Image->save($tmp))
-				{
-					$Images->delete($imageID);
-					$errorMsg = 'Image could not be uploaded';
-				}
-			}
-		}
-		else
-		{
-			$errorMsg = 'Select an Image to upload';
-		}
-
-		$status['errorMsg'] = $errorMsg;
-		$status['imageID'] = $imageID;
-		return $status;
-	}
-
-	function _removeUserPhoto($encodedImageID = null) {
-		if($encodedImageID) {
-			$imageID = base64_decode($encodedImageID);
-		}
-		else {
-			$imageID = $this->Session->read('User.image_id');
-		}
-		$this->deleteImage($imageID);
-		return true;
-	}
-
-	function removePhoto() {
-		$this->_removeUserPhoto();
-		$this->User->id = $this->Session->read('User.id');
-		$tmp['User']['id'] = $this->Session->read('User.id');
-		$tmp['User']['image_id'] = null;
-		$this->User->save($tmp);
-		$userInfo = $this->User->read();
-		$this->Session->write('User', $userInfo['User']);
-		$this->redirect('/users/viewProfile');
-	}
-
-	function search() {
-		$this->set('title_for_layout', 'Search');
-		$type = 'student';
-
-		if($this->request->isPost()) {
-			$data = $this->request->data;
-			$conditions = null;
-			if(isset($data['User']['type']) and !empty($data['User']['type'])) {
-				$type = $data['User']['type'];
-				$conditions[] = array('User.type'=>$type);
-			}
-			else {
-				$conditions[] = array('User.type'=>$type);
-			}
-			if(isset($data['User']['batch']) and !empty($data['User']['batch'])) {
-				$batch = $data['User']['batch'];
-
-				if($type != 'student') {
-					$conditions[] = array('User.service_start_year <='=>$batch);
-					$conditions[] = array('User.service_end_year >='=>$batch);
-				}
-				else {
-					$conditions[] = array('User.batch'=>$batch);
-				}
-			}
-			if(isset($data['User']['name']) and !empty($data['User']['name'])) {
-				$name = '%'.Sanitize::paranoid($data['User']['name'], array(' ')).'%';
-				$conditions[] = array('User.name LIKE '=>$name);
-			}
-			$this->User->bindModel(array('hasOne'=>array('PrivacySetting')));
-			$users = $this->User->find('all', array('conditions'=>$conditions, 'order'=>array('User.batch DESC', 'User.class DESC', 'User.section ASC', 'User.name ASC', 'User.passout_year DESC' )));
-		}
-		$this->set(compact('users', 'batch', 'type'));
-	}
-
-	function studentsDirectory() {
-		if($this->request->isPost()) {
-			$data = $this->request->data;
-			$batch = $data['User']['batch'];
-
-			$this->User->bindModel(array('hasOne'=>array('PrivacySetting')));
-			$users = $this->User->find('all', array('conditions'=>array('User.batch'=>$batch), 'order'=>array('User.passout_year DESC', 'User.class DESC', 'User.section ASC', 'User.name ASC')));
-			$this->set(compact('users', 'batch'));
-		}
-	}
-
-	function info($userID) {
-		if($userInfo = $this->User->findById($userID)) {
-			App::uses('PrivacySetting', 'Model');
-			$this->PrivacySetting = new PrivacySetting;
-			$this->PrivacySetting->recursive = -1;
-			$privacySettings = $this->PrivacySetting->findByUserId($userID);
-
-			$this->set(compact('userID', 'userInfo', 'privacySettings'));
-		}
-		else {
-			$this->Session->setFlash('Member not found', 'default', array('class'=>'error'));
-			$this->redirect($this->request->referer());
-		}
-	}
-
-	function sendMessage($userID) {
-		if(!$userInfo = $this->User->findById($userID)) {
-			$this->Session->setFlash('Member not found', 'default', array('class'=>'error'));
-			$this->redirect($this->request->referer());
-		}
-
-		$errorMsg = array();
-		if ($this->request->is('post')) {
-			$data = $this->request->data;
-
-
-			$fromUserName = $this->Session->read('User.name');
-			$fromUserEmail = $this->Session->read('User.email');
-
-			$toUserName = $userInfo['User']['name'];
-			$toUserEmail = $userInfo['User']['email'];
-
-			// Validate message
-			if(Validation::blank($data['User']['message'])) {
-				$errorMsg[] = 'Message field cannot be empty';
-			}
-
-			if(empty($errorMsg)) {
-				try {
-					$mailContent = '
-Dear '.$toUserName.',
-
-A person has tried to contact you on '.Configure::read('Domain').'.
-
-Contact Details:
-----------------------------------------
-Name: '.$fromUserName.'
-Email: '.$fromUserEmail.'
-Message: '.htmlentities($data['User']['message']).'
-
-
--
-'.Configure::read('Domain').'
-
-*This is a system generated message. Please do not reply.
-
-';
-					$supportEmail = Configure::read('SupportEmail');
-					$email = new CakeEmail();
-					$email->from(array('noreply@bhelhss.com' => 'bhelhss.com'));
-					$email->replyTo(array($fromUserEmail => $fromUserName));
-					$email->to(array($toUserEmail=>$toUserName));
-					$email->subject('Message from '.$fromUserName);
-					$email->send($mailContent);
-
-					$this->Session->setFlash('Your message has been sent successfully.', 'default', array('class'=>'success'));
-					$this->redirect('/users/sendMessage/'.$userID);
-				}
-				catch(Exception $ex) {
-					$this->Session->setFlash('An error occurred while communicating with the server. Please try again.', 'default', array('class'=>'error'));
-				}
-			}
-		}
-		$title_for_layout = 'Contact Member';
-		$errorMsg = implode('<br>', $errorMsg);
-		$this->set(compact('userID', 'userInfo', 'title_for_layout', 'errorMsg'));
-	}
-
-	function membersList() {
-		$this->checkModerator();
-
-		$users = $this->User->find('all', array('order'=>'User.created ASC'));
-		$this->set(compact('users'));
-	}
-
-	function subscribe() {
-		if($this->request->isPost() or $this->request->isPut()) {
-			$data = $this->request->data;
-			$data['User']['id'] = $this->Session->read('User.id');
-			$this->User->save($data);
-			$this->Session->setFlash('Your information has been successfully updated.', 'default', array('class'=>'success'));
-			$this->redirect('/users/subscribe');
-		}
-		else {
-			$this->User->recursive = -1;
-			$this->data = $this->User->findById($this->Session->read('User.id'));
-		}
-	}
-
-	public function add_member()
+	public function logout()
 	{
-		$errorMsg = '';
-		$this->layout = 'hss';
-
-		if ($this->request->is('post')) {
-			$data = $this->request->data;
-			$response = $this->save_registration_data($data);
-
-			if ($response['success']) {
-				$this->Flash->set('Member information saved successfully.', ['element' => 'success']);
-				$this->redirect('/AlumniMembers/');
-			}
-
-			$errorMsg = $response['errors'];
-		}
-
-		$this->set(compact('errorMsg'));
+		$this->Session->destroy();
+		$this->redirect('/hss/alumni_member_login');
 	}
 
-
-	public function edit_member($alumiMemberId)
+	public function gallery()
 	{
-		$errorMsg = '';
-		$this->layout = 'hss';
+		$hideFooter = true;
 
-		$alumiMemberModel = new AlumniMember();
+		$this->redirect('/img/gallery');
 
-		$alumniMemberInfo = $alumiMemberModel->findById($alumiMemberId);
+		$dir = new Folder(WWW_ROOT . 'img/gallery_page/');
+		$files = $dir->findRecursive('.*\.jpg|.png|.jpeg|.gif|.bmp');
 
-		if (empty($alumniMemberInfo)) {
-			$this->Flash->set('Member not found.', ['element' => 'error']);
-			$this->redirect('/AlumniMembers/');
-		}
+		$this->set(compact('hideFooter', 'files'));
+	}
+
+	public function testEmail()
+	{
+
+		$subject = 'Test Login OTP';
+
+		$mailContent = '<p>Please use the below OTP to login.</p><p><b>0420</b></p><p><br>*Note: The above OTP is valid only for 15mins.</p><br><br>-<br>BHEL HSS LOCAL';
+		$email = new CakeEmail('smtpNoReply');
+		$email->emailFormat('html');
+		$email->to(['preetham.pawar@gmail.com' => 'preetham.pawar@gmail.com']);
+		$email->subject($subject);
+		$email->send($mailContent);
+		exit;
+	}
+
+	public function alumni_members($download = 0)
+	{
+		$this->AlumniMember = new AlumniMember();
+		$conditions = [];
+		$title_for_layout = 'Manage Alumni Members';
+		$searchBy = $this->request->query['searchby'] ?? 'total-registered';
 
 		if ($this->request->is('post')) {
-			$data = $this->request->data;
-			$data['User']['id'] = $alumiMemberId;
-			$response = $this->save_registration_data($data);
+			$searchText = $this->data['AlumniMember']['search_text'];
+			$date = $this->data['AlumniMember']['date'];
 
-			if ($response['success']) {
-				$this->Flash->set('Member information saved successfully.', ['element' => 'success']);
-				$this->redirect('/AlumniMembers/');
+			if (!empty($searchText)) {
+				$conditions['or']['AlumniMember.name LIKE'] = "%{$searchText}%";
+				$conditions['or']['AlumniMember.phone LIKE'] = "%{$searchText}%";
+				$conditions['or']['AlumniMember.email LIKE'] = "%{$searchText}%";
 			}
 
-			$errorMsg = $response['errors'];
-		} else {
-			$user['User'] =  $alumniMemberInfo['AlumniMember'];
-			$this->data = $user;
+			if (!empty($date)) {
+				$conditions['DATE(AlumniMember.created)'] = "$date";
+			}
 		}
 
-		$this->set(compact('errorMsg'));
+		if ($searchBy === 'registered-today') {
+			$conditions['DATE(AlumniMember.created)'] = date('Y-m-d');
+		}
+
+		if ($searchBy === 'accounts-verified') {
+			$conditions['AlumniMember.account_verified'] = 1;
+		}
+
+		if ($searchBy === 'payments-confirmed') {
+			$conditions['AlumniMember.payment_confirmed'] = 1;
+		}
+
+		$alumniMembers = $this->AlumniMember->find('all', [
+			'order' => ['AlumniMember.created desc'],
+			'conditions' => $conditions,
+		]);
+
+		if ($download) {
+			ini_set('max_execution_time', '10000');
+			ini_set('memory_limit', '1024M');
+
+			$fileName = 'MembersList-' . $searchBy . '-' . time() . '.csv';
+			$this->layout = 'ajax';
+
+			$this->response->compress();
+			$this->response->type('csv');
+			$this->response->download($fileName);
+		}
+
+		// get total members count
+		$conditions = [];
+		$allAlumniMembersCount = $this->AlumniMember->find('count', [
+			'order' => ['AlumniMember.name'],
+			'conditions' => $conditions,
+		]);
+
+		// get total members count registered today
+		$conditions = [];
+		$conditions['DATE(AlumniMember.created)'] = date('Y-m-d');
+		$todaysAlumniMembersCount = $this->AlumniMember->find('count', [
+			'order' => ['AlumniMember.name'],
+			'conditions' => $conditions,
+		]);
+
+		// get total payments confirmed
+		$paymentsModel = new Payment();
+		$paymentsConfirmedCount = $paymentsModel->find('count', [
+			'conditions' => ['Payment.payment_confirmed' => 1],
+		]);
+
+		// get total payments
+		$totalPaymentsConfirmedCount = $paymentsModel->find('count', [
+			//'conditions' => ['Payment.payment_confirmed' => 1],
+		]);
+
+		// get total accounts confirmed
+		$accountsVerifiedCount = $this->AlumniMember->find('count', [
+			'order' => ['AlumniMember.name'],
+			'conditions' => ['AlumniMember.account_verified' => 1],
+		]);
+
+		$this->set(compact('alumniMembers', 'download', 'title_for_layout', 'allAlumniMembersCount', 'todaysAlumniMembersCount', 'paymentsConfirmedCount', 'accountsVerifiedCount', 'searchBy', 'totalPaymentsConfirmedCount'));
+	}
+
+	public function delete_member($alumniMemberId)
+	{
+		$this->AlumniMember = new AlumniMember();
+		$this->AlumniMember->delete($alumniMemberId);
+
+		$this->Flash->set('Member deleted successfully.', ['element' => 'success']);
+		$this->redirect(array('action' => 'alumni_members'));
 	}
 }
-?>

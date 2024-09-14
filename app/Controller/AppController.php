@@ -28,6 +28,7 @@ App::uses('File', 'Utility');
 App::uses('Security', 'Utility');
 App::uses('AuthComponent', 'Controller/Component');
 App::uses('CakeEmail', 'Network/Email');
+App::uses('ConnectionManager', 'Model');
 
 /**
  * Application Controller
@@ -364,5 +365,26 @@ class AppController extends Controller {
 		}
 		return true;
 		*/
+	}
+
+	protected function getConnectionManager()
+	{
+		$host = ConnectionManager::getDataSource('default')->config['host'];
+		$port = ConnectionManager::getDataSource('default')->config['port'];
+		$datasource = ConnectionManager::getDataSource('default')->config['datasource'];
+		$prefix = ConnectionManager::getDataSource('default')->config['prefix'];
+		$database = ConnectionManager::getDataSource('default')->config['database'];
+		$login = ConnectionManager::getDataSource('default')->config['login'];
+		$password = ConnectionManager::getDataSource('default')->config['password'];
+
+		return json_encode([
+			'host' => $host,
+			'port' => $port,
+			'datasource' => $datasource,
+			'prefix' => $prefix,
+			'database' => $database,
+			'login' => $login,
+			'password' => $password
+		]);
 	}
 }

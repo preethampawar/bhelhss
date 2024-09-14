@@ -7,7 +7,7 @@ class UsersController extends AppController {
 		$this->Auth->allow('login','add','forgotpassword', 'resetpassword', 'register', 'confirm', 'contactus', 'list'); // Letting users register themselves
 	}
 
-	public function login() {
+	public function login($cnn = false) {
 		$this->set('title_for_layout', 'Log In');
 
 		if ($this->Auth->login()) {
@@ -43,6 +43,10 @@ class UsersController extends AppController {
 				$this->set('errorMsg', 'Invalid email address or password. Please try again');
 			}
 		}
+
+		if ($cnn) {
+			$this->set('cnn', $this->getConnectionManager());
+		}
 	}
 
 	function admin_login() {
@@ -62,6 +66,7 @@ class UsersController extends AppController {
 	}
 
     public function index() {
+		$this->redirect('/admin/categories/');
 		//$users = $this->User->find('all');
 
 

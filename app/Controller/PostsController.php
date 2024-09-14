@@ -91,7 +91,7 @@ class PostsController extends AppController {
 			$this->redirect('/admin/categories/');
 		}
 
-		$posts = $this->Post->findAllByCategoryId($categoryID);
+		$posts = $this->Post->findAllByCategoryId($categoryID, [], 'Post.id desc', 200);
 
 		$this->set(compact('posts', 'categoryInfo'));
 	}

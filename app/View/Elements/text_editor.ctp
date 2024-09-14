@@ -1,6 +1,6 @@
-<?php 
+<?php
 // echo $this->Html->script('jquery-1.7.2.min');
-echo $this->Html->script('tinymce/jscripts/tiny_mce/jquery.tinymce'); 
+echo $this->Html->script('tinymce/jscripts/tiny_mce/jquery.tinymce');
 ?>
 <script type="text/javascript">
 	$().ready(function() {

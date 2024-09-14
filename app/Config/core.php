@@ -34,7 +34,7 @@
  * In production mode, flash messages redirect after a time interval.
  * In development mode, you need to click the flash message to continue.
  */
-	Configure::write('debug', 2);
+	Configure::write('debug', 1);
 
 /**
  * Configure the Error handler used to handle errors for your application. By default
@@ -403,10 +403,10 @@ Cache::config('_cake_model_', array(
 /* Domain Information */
 Configure::write('Domain', 'bhelhss.com');
 Configure::write('DomainName', 'www.bhelhss.com');
-Configure::write('DomainUrl', 'http://www.bhelhss.com/');
+Configure::write('DomainUrl', 'https://www.bhelhss.com/');
 
 /* Site email configuration */
-Configure::write('SupportEmail', 'support@bhelhss.com');
+Configure::write('SupportEmail', 'admin@bhelhss.com');
 Configure::write('SupportEmail2', array('tk_anil@yahoo.com', 'bhelhssaa@gmail.com'));
 
 /* Image Size */

@@ -1,11 +1,10 @@
 <div>
 <h2>Categories</h2>
 <?php
-$categories = $this->requestAction(array('controller'=>'categories', 'action'=>'getCategories', 'admin'=>true));
+//$categories = $this->requestAction(array('controller'=>'categories', 'action'=>'getCategories', 'admin'=>true));
 if(!empty($categories)) {
 ?>
-<div><?php echo $this->Html->Link('+ Add New Category', '/admin/categories/add');?></div>
-<br>
+<div><?php //echo $this->Html->Link('+ Add New Category', '/admin/categories/add');?></div>
 <div id='adminCategoryNavigation' style="width:400px;">
 
 		<?php

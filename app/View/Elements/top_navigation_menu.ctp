@@ -53,7 +53,8 @@
 		<div id="topnav">
 			<ul>
 				<li class="active">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <?php echo $this->Html->link('Manage Posts', '/admin/categories/');?></li>
-				<li><?php echo $this->Html->link('Members List', '/AlumniMembers/', array('title'=>'Members List'));?></li>
+				<li><?php echo $this->Html->link('Members List', '/hss/alumni_members', array('title'=>'Members List'));?></li>
+				<li><?php echo $this->Html->link('Payments', '/hss/payments', array('title'=>'Payments'));?></li>
 
 				<?php
 				if($this->Session->check('User')) {

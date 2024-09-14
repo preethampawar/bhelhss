@@ -1,4 +1,4 @@
-<script src="/bhelhss/r.mobirisesite.com/558418/assets/web/assets/jquery/jquery.mincdd7.js?rnd=1720766556551"></script>
+<!--<script src="/bhelhss/r.mobirisesite.com/558418/assets/web/assets/jquery/jquery.mincdd7.js?rnd=1720766556551"></script>-->
 <script src="/bhelhss/r.mobirisesite.com/558418/assets/bootstrap/js/bootstrap.bundle.mincdd7.js?rnd=1720766556551"></script>
 <script src="/bhelhss/r.mobirisesite.com/558418/assets/smoothscroll/smooth-scrollcdd7.js?rnd=1720766556551"></script>
 <script src="/bhelhss/r.mobirisesite.com/558418/assets/ytplayer/indexcdd7.js?rnd=1720766556551"></script>
