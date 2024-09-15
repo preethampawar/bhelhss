@@ -21,7 +21,8 @@
 		<div class="row justify-content-center">
 			<div class="col-12 mx-auto mbr-form">
 				<div class="text-end pe-3 mb-2">
-					<a href="/hss/event_registration" class="btn btn-primary rounded-pill">Event Registration &nbsp;&raquo;</a>
+					<a href="/hss/event_registration" class="btn btn-secondary rounded-pill">Event Registration &raquo;</a>
+					<a href="/hss/register_dependants" class="btn btn-primary rounded-pill ms-2">Register Dependants &raquo;</a>
 				</div>
 				<div class="p-5 text-black bg-light" style="border-radius: 1.5rem;">
 					<div class="mbr-section-head">
@@ -34,6 +35,7 @@
 								<thead>
 								<tr>
 									<th>#</th>
+									<th>Payment Type</th>
 									<th>No. of Attendees</th>
 									<th>Mentioned Amount</th>
 									<th>Credited Amount</th>
@@ -49,6 +51,10 @@
 								foreach ($payments as $payment) {
 									$i++;
 									$type = $payment['Payment']['type'];
+									$registrationType = $type === 'event_registration_fee'
+										? 'Event Registration Fee'
+										: 'Dependant Registration Fee';
+
 									$attedeesCount = $payment['Payment']['no_of_attendees'];
 									$paidAmount = $payment['Payment']['paid_amount'];
 									$verifiedAmount = $payment['Payment']['verified_amount'] ? $payment['Payment']['verified_amount'] : '-';
@@ -61,6 +67,7 @@
 									?>
 									<tr>
 										<td><?php echo $i; ?>.</td>
+										<td><?php echo $registrationType ; ?></td>
 										<td><?php echo $attedeesCount; ?></td>
 										<td><?php echo $paidAmount; ?></td>
 										<td><?php echo $verifiedAmount; ?></td>

@@ -8,6 +8,9 @@ if ($type == 'event_registration_fee') {
 if ($type == 'donation') {
 	$paymentType = 'Donation';
 }
+if ($type == 'dependants') {
+	$paymentType = 'Dependants Fee';
+}
 $attedeesCount = $paymentInfo['Payment']['no_of_attendees'];
 $paidAmount = $paymentInfo['Payment']['paid_amount'];
 $verifiedAmount = $paymentInfo['Payment']['verified_amount'] ? $paymentInfo['Payment']['verified_amount'] : '-';
@@ -17,7 +20,37 @@ $paymentConfirmed = $paymentInfo['Payment']['payment_confirmed']
 	? '<span class="text-success fw-bold">Verified</span>'
 	: '<span class="text-danger fw-bold">No</span>';
 $createdDate = date('d-m-Y', strtotime($paymentInfo['Payment']['created']));
+$extraInfo = $paymentInfo['Payment']['extra_info'];
+$registeredDependants = '';
 
+if (!empty($extraInfo)) {
+	$extraInfo = json_decode($extraInfo, true);
+
+	if ($extraInfo['father'] == 1) {
+		$registeredDependants .= $extraInfo['record']['Dependant']['father_name'] ?? '';
+		$registeredDependants .= ' (Father, ' . $extraInfo['record']['Dependant']['father_age'] . ' yrs) <hr>';
+	}
+	if ($extraInfo['mother'] == 1) {
+		$registeredDependants .= $extraInfo['record']['Dependant']['mother_name'] ?? '';
+		$registeredDependants .= ' (Mother, ' . $extraInfo['record']['Dependant']['mother_age'] . ' yrs) <hr>';
+	}
+	if ($extraInfo['spouse'] == 1) {
+		$registeredDependants .= $extraInfo['record']['Dependant']['spouse_name'] ?? '';
+		$registeredDependants .= ' (Spouse, ' . $extraInfo['record']['Dependant']['spouse_age'] . ' yrs) <hr>';
+	}
+	if ($extraInfo['child1'] == 1) {
+		$registeredDependants .= $extraInfo['record']['Dependant']['child1_name'] ?? '';
+		$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child1_age'] . ' yrs) <hr>';
+	}
+	if ($extraInfo['child2'] == 1) {
+		$registeredDependants .= $extraInfo['record']['Dependant']['child2_name'] ?? '';
+		$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child2_age'] . ' yrs) <hr>';
+	}
+	if ($extraInfo['child3'] == 1) {
+		$registeredDependants .= $extraInfo['record']['Dependant']['child3_name'] ?? '';
+		$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child3_age'] . ' yrs) ';
+	}
+}
 ?>
 
 <style>
@@ -71,6 +104,7 @@ $createdDate = date('d-m-Y', strtotime($paymentInfo['Payment']['created']));
 								<?php
 							}
 							?>
+							<th>Dependants</th>
 							<th>Mentioned Amount</th>
 							<th>Credited Amount</th>
 							<th>Transaction ID</th>
@@ -88,6 +122,7 @@ $createdDate = date('d-m-Y', strtotime($paymentInfo['Payment']['created']));
 								<?php
 							}
 							?>
+							<td><?php echo $registeredDependants; ?></td>
 							<td><?php echo $paidAmount; ?></td>
 							<td><?php echo $verifiedAmount; ?></td>
 							<td><?php echo $transactionId; ?></td>
@@ -151,14 +186,14 @@ $createdDate = date('d-m-Y', strtotime($paymentInfo['Payment']['created']));
 						}
 						?>
 						<div class="col-12 col-md-4 pt-3">
-							<label for="payment-transaction-id" class="ms-2">Transaction UTR ID / Reference No.</label>
+							<label for="payment-transaction-id" class="ms-2">UTR or UPI Transaction ID / Reference No.</label>
 							<input
 								type="text"
 								value="<?php echo $this->data['Payment']['transaction_id'] ?? $transactionId; ?>"
 								id="payment-transaction-id"
 								class="form-control"
 								name="data[Payment][transaction_id]"
-								placeholder="Enter Transaction UTR ID">
+								placeholder="Enter UTR or UPI Transaction ID">
 
 						</div>
 						<div class="col-12 col-md-4 pt-3">
@@ -170,6 +205,13 @@ $createdDate = date('d-m-Y', strtotime($paymentInfo['Payment']['created']));
 								class="form-control"
 								name="data[Payment][verified_amount]"
 								required>
+						</div>
+					</div>
+
+					<div class="row mt-4">
+						<div class="col-md col-sm-12" data-for="screenshot2">
+							<label for="payment-screenshot" class="mb-2 d-block ms-2">Upload Payment Receipt/Screenshot</label>
+							<input type="file" id="payment-screenshot" name="data[Payment][screenshot]" class="ms-2">
 						</div>
 					</div>
 

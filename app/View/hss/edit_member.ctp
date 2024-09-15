@@ -145,8 +145,8 @@ $paymentConfirmed = $this->data['User']['payment_confirmed'] ?? 0;
 							<input type="text" name="data[User][amount_paid]" placeholder="Amount Paid" data-form-field="url" class="form-control" value="<?php echo $amountPaid; ?>" id="amount-paid-register-form" required>
 						</div>
 						<div class="col-md col-sm-12 form-group mb-3" data-for="text">
-							<label for="transaction-id-register-form" class="ps-4">Transaction UTR ID</label>
-							<input type="text" name="data[User][transaction_id]" placeholder="Transaction UTR ID" data-form-field="text" class="form-control" value="<?php echo $transactionId; ?>" id="transaction-id-register-form" required>
+							<label for="transaction-id-register-form" class="ps-4">UTR or UPI Transaction ID</label>
+							<input type="text" name="data[User][transaction_id]" placeholder="UTR or UPI Transaction ID" data-form-field="text" class="form-control" value="<?php echo $transactionId; ?>" id="transaction-id-register-form" required>
 							<div class="mt-2 px-3 text-center">
 								Screenshot:
 								<?php

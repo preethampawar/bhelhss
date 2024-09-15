@@ -115,6 +115,7 @@
 								style="background: rgba(255, 255, 255, 0.97) !important;">
 								<li><a class="dropdown-item" href="/hss/alumni_member_profile">My Profile</a></li>
 								<li><a class="dropdown-item" href="/hss/donations">Donations</a></li>
+								<li><a class="dropdown-item" href="/hss/register_dependants">Register Dependants</a></li>
 								<li><a class="dropdown-item" href="/hss/event_registration">Event Registration</a></li>
 								<li><a class="dropdown-item" href="/hss/logout">Logout</a></li>
 							</ul>

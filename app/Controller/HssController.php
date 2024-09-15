@@ -1,6 +1,7 @@
 <?php
 App::uses('CakeEmail', 'Network/Email');
 App::uses('AlumniMember', 'Model');
+App::uses('Dependant', 'Model');
 App::uses('ContactMessage', 'Model');
 App::uses('Payment', 'Model');
 App::uses('Post', 'Model');
@@ -321,7 +322,7 @@ Your login OTP is <b>' . $otp . '</b>.
 		$alumniMemberId = $this->Session->read('AlumniMember.id');
 		$conditions = [
 			'Payment.alumni_member_id' => $alumniMemberId,
-			'Payment.type' => 'event_registration_fee',
+			'Payment.type' => ['event_registration_fee', 'dependants'],
 		];
 
 		if ($alumniMemberId) {
@@ -566,18 +567,21 @@ Your payment towards Reunion-2024 event has been verified successfully.
 
 		}
 
-		if ($paymentType == 'Event-Fees' || $paymentType == 'Donations') {
+		if ($paymentType == 'Event-Fees' || $paymentType == 'Donations' || $paymentType == 'Dependants-Fee') {
 			if ($paymentType == 'Event-Fees') {
 				$type = 'event_registration_fee';
 			}
 			if ($paymentType == 'Donations') {
 				$type = 'donation';
 			}
+			if ($paymentType == 'Dependants-Fee') {
+				$type = 'dependants';
+			}
 			$conditions = [
 				'Payment.type' => $type,
 			];
 		}
-		$payments = $paymentModel->find('all', ['conditions' => $conditions]);
+		$payments = $paymentModel->find('all', ['conditions' => $conditions, 'order' => ['Payment.created desc']]);
 
 		$this->set(compact('payments', 'paymentType', 'download'));
 	}
@@ -601,7 +605,7 @@ Your payment towards Reunion-2024 event has been verified successfully.
 		];
 
 		if ($alumniMemberId) {
-			$payments = $paymentModel->find('all', ['conditions' => $conditions]);
+			$payments = $paymentModel->find('all', ['conditions' => $conditions, 'order' => ['Payment.created desc']]);
 		}
 
 		$this->set(compact('alumniMemberInfo', 'payments'));
@@ -630,6 +634,22 @@ Your payment towards Reunion-2024 event has been verified successfully.
 
 			if (empty($errorMsg)) {
 				$data['Payment']['id'] = $paymentId;
+
+				$filename = '';
+
+				if (!empty($data['Payment']['screenshot']['name'])) {
+					$filename = $paymentInfo['Payment']['alumni_member_id'] .
+						'_' . time() .
+						'_' .
+						basename($this->request->data['Payment']['screenshot']['name']);
+					move_uploaded_file(
+						$this->data['Payment']['screenshot']['tmp_name'],
+						WWW_ROOT . DS . 'payments' . DS . $filename
+					);
+				}
+
+				$data['Payment']['transaction_file2'] = $filename;
+
 				if ($paymentModel->save($data)) {
 					$paymentInfo = $paymentModel->read();
 					$memberId = $paymentInfo['AlumniMember']['id'];
@@ -646,7 +666,7 @@ Your payment towards Reunion-2024 event has been verified successfully.
 						$date = date('d-m-Y');
 						$receiptNo = 'E-' . $paymentInfo['Payment']['id'];
 
-						if ($paymentType == 'event_registration_fee') {
+						if ($paymentType == 'event_registration_fee' || $paymentType == 'dependants') {
 							$body = 'Received with thanks from Mr/Mrs/Ms. ' . $memberName . ', Rs. ' . $amount . '/- towards EUPHORIA-2024, BHEL HSS Alumni reunion event expenses.';
 							$mailContent = '
 Dear ' . $memberName . ',
@@ -740,7 +760,7 @@ Your donation towards event expenses and development of Alumni community has bee
 						$email = new CakeEmail('smtpNoReply');
 						$email->to($memberEmail);
 						//$email->cc(['accounts@bhelhss.com']);
-						$email->cc(['preetham.pawar@gmail.com']);
+						$email->bcc(['preetham.pawar@gmail.com' => 'noreply@bhelhss.com'],);
 						$email->subject('Payment verified successfully');
 						$email->emailFormat('html');
 						$email->send($mailContent);
@@ -878,7 +898,7 @@ You have successfully registered with BHEL HSS Alumni. Thanks for signing up wit
 			$donationAmount = (float)($data['Donation']['paid_amount'] ?? 0);
 
 			if (empty($data['Payment']['transaction_id']) && empty($data['Payment']['screenshot']['name'])) {
-				$this->Flash->set('Please enter transaction UTR ID (or) Upload the payment receipt.', ['element' => 'error']);
+				$this->Flash->set('Please enter UTR or UPI Transaction ID (or) Upload the payment receipt.', ['element' => 'error']);
 			} else {
 				$filename = '';
 
@@ -952,7 +972,7 @@ You have successfully registered with BHEL HSS Alumni. Thanks for signing up wit
 			$data = $this->request->data;
 
 			if (empty($data['Payment']['transaction_id']) && empty($data['Payment']['screenshot']['name'])) {
-				$this->Flash->set('Please enter transaction UTR ID (or) Upload the payment receipt.', ['element' => 'error']);
+				$this->Flash->set('Please enter UTR or UPI Transaction ID (or) Upload the payment receipt.', ['element' => 'error']);
 			} else {
 				$filename = '';
 
@@ -996,6 +1016,155 @@ You have successfully registered with BHEL HSS Alumni. Thanks for signing up wit
 
 		$this->set(compact('memberInfo'));
 	}
+
+	public function dependants()
+	{
+		$memberInfo['AlumniMember'] = $this->Session->read('AlumniMember');
+
+		if (!$memberInfo) {
+			$this->redirect('/');
+		}
+
+		$dependantId = null;
+		$errorMsg = '';
+		$dependantModel = new Dependant();
+		$alumniMemberId = $memberInfo['AlumniMember']['id'];
+		$dependantsInfo = $dependantModel->findByAlumniMemberId($alumniMemberId);
+
+		if (!empty($dependantsInfo)) {
+			$dependantId = $dependantsInfo['Dependant']['id'];
+		}
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+
+			$fatherName = trim($data['Dependant']['father_name']);
+			$motherName = trim($data['Dependant']['mother_name']);
+			$spouseName = trim($data['Dependant']['spouse_name']);
+			$child1Name = trim($data['Dependant']['child1_name']);
+			$child2Name = trim($data['Dependant']['child2_name']);
+			$child3Name = trim($data['Dependant']['child3_name']);
+
+			if (empty($fatherName)
+				&& empty($motherName)
+				&& empty($spouseName)
+				&& empty($child1Name)
+				&& empty($child2Name)
+				&& empty($child3Name)
+			) {
+				$errorMsg = 'Please fill dependants information.';
+			}
+
+			if (empty($errorMsg)) {
+				$data['Dependant']['id'] = $dependantId;
+				$data['Dependant']['alumni_member_id'] = $alumniMemberId;
+				$data['Dependant']['father_name'] = trim($data['Dependant']['father_name']);
+				$data['Dependant']['father_age'] = trim($data['Dependant']['father_age']);
+				$data['Dependant']['mother_name'] = trim($data['Dependant']['mother_name']);
+				$data['Dependant']['mother_age'] = trim($data['Dependant']['mother_age']);
+				$data['Dependant']['child1_name'] = trim($data['Dependant']['child1_name']);
+				$data['Dependant']['child1_age'] = trim($data['Dependant']['child1_age']);
+				$data['Dependant']['child2_name'] = trim($data['Dependant']['child2_name']);
+				$data['Dependant']['child2_age'] = trim($data['Dependant']['child2_age']);
+				$data['Dependant']['child3_name'] = trim($data['Dependant']['child3_name']);
+				$data['Dependant']['child3_age'] = trim($data['Dependant']['child3_age']);
+
+				if ($dependantModel->save($data)) {
+					$this->Flash->set("Dependant details saved successfully.", ['element' => 'success']);
+					$this->redirect('/hss/dependants');
+				}
+			}
+		} else {
+			$dependants = $dependantModel->findByAlumniMemberId($memberInfo['AlumniMember']['id']);
+			$this->data = $dependants;
+		}
+
+		$this->set(compact('dependants', 'errorMsg'));
+
+	}
+
+	public function register_dependants()
+	{
+		$memberInfo['AlumniMember'] = $this->Session->read('AlumniMember');
+
+		if (!$memberInfo) {
+			$this->redirect('/');
+		}
+
+		$dependantModel = new Dependant();
+		$alumniMemberId = $memberInfo['AlumniMember']['id'];
+		$dependantsInfo = $dependantModel->findByAlumniMemberId($alumniMemberId);
+
+		if (empty($dependantsInfo)) {
+			$this->Flash->set("You need to add dependants before you register them for the event.", ['element' => 'error']);
+			$this->redirect('/hss/dependants');
+		}
+
+		$fatherName = $dependantsInfo['Dependant']['father_name'];
+		$motherName = $dependantsInfo['Dependant']['mother_name'];
+		$spouseName = $dependantsInfo['Dependant']['spouse_name'];
+		$child1Name = $dependantsInfo['Dependant']['child1_name'];
+		$child2Name = $dependantsInfo['Dependant']['child2_name'];
+		$child3Name = $dependantsInfo['Dependant']['child3_name'];
+
+		if (empty($fatherName)
+			&& empty($motherName)
+			&& empty($spouseName)
+			&& empty($child1Name)
+			&& empty($child2Name)
+			&& empty($child3Name)
+		) {
+			$this->Flash->set("You need to add dependants before you register them for the event.", ['element' => 'error']);
+			$this->redirect('/hss/dependants');
+		}
+
+		if ($this->request->is('post')) {
+			$data = $this->request->data;
+			$extraInfo = $data['Dependant'];
+			$extraInfo['record'] = $dependantsInfo;
+			$data['Payment']['extra_info'] = json_encode($extraInfo);
+			$data['Payment']['dependant_id'] = $dependantsInfo['Dependant']['id'];
+
+			if (empty($data['Payment']['transaction_id']) && empty($data['Payment']['screenshot']['name'])) {
+				$this->Flash->set('Please enter UTR or UPI Transaction ID (or) Upload the payment receipt.', ['element' => 'error']);
+			} else {
+				$filename = '';
+
+				if (!empty($data['Payment']['screenshot']['name'])) {
+					$filename = $memberInfo['AlumniMember']['id'] .
+						'_' . time() .
+						'_' .
+						basename($this->request->data['Payment']['screenshot']['name']);
+					move_uploaded_file(
+						$this->data['Payment']['screenshot']['tmp_name'],
+						WWW_ROOT . DS . 'payments' . DS . $filename
+					);
+				}
+
+				$paymentModel = new Payment();
+				$data['Payment']['alumni_member_id'] = $memberInfo['AlumniMember']['id'];
+				$data['Payment']['transaction_file'] = $filename;
+				$paymentModel->save($data);
+
+				$this->Flash->set('Transaction details have been saved successfully.', ['element' => 'success']);
+				$this->redirect('/hss/dependants_registration_success/');
+			}
+		}
+
+		$this->set(compact('memberInfo', 'dependantsInfo'));
+	}
+
+	public function dependants_registration_success()
+	{
+		$memberInfo = $this->Session->read('AlumniMember');
+
+		if (!$memberInfo) {
+			$this->redirect('/');
+		}
+
+		$this->set(compact('memberInfo'));
+	}
+
 
 	public function getcaptcha()
 	{

@@ -10,6 +10,7 @@ if ($download) {
 			'Email',
 			'Payment Type',
 			'No of Attendees',
+			'Dependants',
 			'Mentioned Amount',
 			'Credited Amount',
 			'Transaction ID',
@@ -30,6 +31,9 @@ if ($download) {
 			if ($type == 'donation') {
 				$paymentType = 'Donation';
 			}
+			if ($type == 'dependants') {
+				$paymentType = 'Dependants Fee';
+			}
 
 			$attedeesCount = $payment['Payment']['no_of_attendees'];
 			$paidAmount = $payment['Payment']['paid_amount'];
@@ -37,11 +41,46 @@ if ($download) {
 			$transactionId = $payment['Payment']['transaction_id'];
 			$transactionFile = $payment['Payment']['transaction_file'];
 			$paymentConfirmed = $payment['Payment']['payment_confirmed'];
+			$extraInfo = $payment['Payment']['extra_info'];
+			$registeredDependants = '"';
+
+			if (!empty($extraInfo)) {
+				$extraInfo = json_decode($extraInfo, true);
+
+				if ($extraInfo['father'] == 1) {
+					$registeredDependants .= $extraInfo['record']['Dependant']['father_name'] ?? '';
+					$registeredDependants .= ' (Father, ' . $extraInfo['record']['Dependant']['father_age'] . ' yrs), ';
+				}
+				if ($extraInfo['mother'] == 1) {
+					$registeredDependants .= $extraInfo['record']['Dependant']['mother_name'] ?? '';
+					$registeredDependants .= ' (Mother, ' . $extraInfo['record']['Dependant']['mother_age'] . ' yrs), ';
+				}
+				if ($extraInfo['spouse'] == 1) {
+					$registeredDependants .= $extraInfo['record']['Dependant']['spouse_name'] ?? '';
+					$registeredDependants .= ' (Spouse, ' . $extraInfo['record']['Dependant']['spouse_age'] . ' yrs), ';
+				}
+				if ($extraInfo['child1'] == 1) {
+					$registeredDependants .= $extraInfo['record']['Dependant']['child1_name'] ?? '';
+					$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child1_age'] . ' yrs), ';
+				}
+				if ($extraInfo['child2'] == 1) {
+					$registeredDependants .= $extraInfo['record']['Dependant']['child2_name'] ?? '';
+					$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child2_age'] . ' yrs), ';
+				}
+				if ($extraInfo['child3'] == 1) {
+					$registeredDependants .= $extraInfo['record']['Dependant']['child3_name'] ?? '';
+					$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child3_age'] . ' yrs) ';
+				}
+			}
+
+			$registeredDependants .= '"';
+
 			$createdDate = date('d-m-Y', strtotime($payment['Payment']['created']));
 			$alumniMemberId = $payment['AlumniMember']['id'];
 			$name = $payment['AlumniMember']['name'];
 			$email = $payment['AlumniMember']['email'];
 			$phone = $payment['AlumniMember']['phone'];
+
 
 			$tmp = array();
 			$tmp[] = $k;
@@ -51,6 +90,7 @@ if ($download) {
 			$tmp[] = html_entity_decode($email);
 			$tmp[] = html_entity_decode($paymentType);
 			$tmp[] = html_entity_decode($attedeesCount);
+			$tmp[] = html_entity_decode($registeredDependants);
 			$tmp[] = html_entity_decode($paidAmount);
 			$tmp[] = html_entity_decode($verifiedAmount);
 			$tmp[] = html_entity_decode($transactionId);
@@ -111,6 +151,10 @@ if ($download) {
 												   href="/hss/payments/Event-Fees">Event-Fees</a>
 											</li>
 											<li>
+												<a class="dropdown-item py-2 <?php echo $paymentType == 'Dependants-Fee' ? 'active' : '' ?>"
+												   href="/hss/payments/Dependants-Fee">Dependants-Fee</a>
+											</li>
+											<li>
 												<a class="dropdown-item py-2 <?php echo $paymentType == 'Donations' ? 'active' : '' ?>"
 												   href="/hss/payments/Donations">Donations</a>
 											</li>
@@ -130,11 +174,13 @@ if ($download) {
 									<thead>
 									<tr>
 										<th>#</th>
+										<th>Member ID</th>
 										<th>Name</th>
 										<th>Email</th>
 										<th>Phone</th>
 										<th>Payment Type</th>
 										<th>No. of Attendees</th>
+										<th>Dependants</th>
 										<th>Mentioned Amount</th>
 										<th>Credited Amount</th>
 										<th>Transaction ID/Screenshot</th>
@@ -158,6 +204,9 @@ if ($download) {
 										if ($type == 'donation') {
 											$paymentType = 'Donation';
 										}
+										if ($type == 'dependants') {
+											$paymentType = 'Dependants Fee';
+										}
 
 										$attedeesCount = $payment['Payment']['no_of_attendees'];
 										$paidAmount = $payment['Payment']['paid_amount'];
@@ -172,9 +221,45 @@ if ($download) {
 										$name = $payment['AlumniMember']['name'];
 										$email = $payment['AlumniMember']['email'];
 										$phone = $payment['AlumniMember']['phone'];
+										$extraInfo = $payment['Payment']['extra_info'];
+										$registeredDependants = '';
+
+										if (!empty($extraInfo)) {
+											$extraInfo = json_decode($extraInfo, true);
+
+											if ($extraInfo['father'] == 1) {
+												$registeredDependants .= $extraInfo['record']['Dependant']['father_name'] ?? '';
+												$registeredDependants .= ' (Father, ' . $extraInfo['record']['Dependant']['father_age'] . ' yrs) <hr>';
+											}
+											if ($extraInfo['mother'] == 1) {
+												$registeredDependants .= $extraInfo['record']['Dependant']['mother_name'] ?? '';
+												$registeredDependants .= ' (Mother, ' . $extraInfo['record']['Dependant']['mother_age'] . ' yrs) <hr>';
+											}
+											if ($extraInfo['spouse'] == 1) {
+												$registeredDependants .= $extraInfo['record']['Dependant']['spouse_name'] ?? '';
+												$registeredDependants .= ' (Spouse, ' . $extraInfo['record']['Dependant']['spouse_age'] . ' yrs) <hr>';
+											}
+											if ($extraInfo['child1'] == 1) {
+												$registeredDependants .= $extraInfo['record']['Dependant']['child1_name'] ?? '';
+												$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child1_age'] . ' yrs) <hr>';
+											}
+											if ($extraInfo['child2'] == 1) {
+												$registeredDependants .= $extraInfo['record']['Dependant']['child2_name'] ?? '';
+												$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child2_age'] . ' yrs) <hr>';
+											}
+											if ($extraInfo['child3'] == 1) {
+												$registeredDependants .= $extraInfo['record']['Dependant']['child3_name'] ?? '';
+												$registeredDependants .= ' (Child, ' . $extraInfo['record']['Dependant']['child3_age'] . ' yrs) ';
+											}
+										}
+
 										?>
 										<tr>
 											<td><?php echo $i; ?>.</td>
+											<td>
+												<a href="/hss/member_payments/<?php echo $alumniMemberId; ?>"
+												   class="nowrap"><?php echo $alumniMemberId; ?></a>
+											</td>
 											<td>
 												<a href="/hss/member_payments/<?php echo $alumniMemberId; ?>"
 												   class="nowrap"><?php echo $name; ?></a>
@@ -184,6 +269,7 @@ if ($download) {
 											<td><?php echo $phone; ?></td>
 											<td><?php echo $paymentType; ?></td>
 											<td><?php echo $attedeesCount; ?></td>
+											<td><?php echo $registeredDependants; ?></td>
 											<td><?php echo $paidAmount; ?></td>
 											<td><?php echo $verifiedAmount; ?></td>
 											<td>

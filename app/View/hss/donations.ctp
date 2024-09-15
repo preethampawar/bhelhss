@@ -43,8 +43,47 @@
 									value="5000"
 									required>
 
-								<label for="payment-transaction-id" class="ms-2  mt-3">Transaction UTR ID / Reference No.</label>
-								<input type="text" id="payment-transaction-id" class="form-control" name="data[Payment][transaction_id]" placeholder="Enter transaction UTR ID">
+								<!-- Modal -->
+								<div class="modal fade" id="staticBackdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+									<div class="modal-dialog modal-dialog-scrollable">
+										<div class="modal-content">
+											<div class="modal-header">
+												<h1 class="modal-title fs-5" id="staticBackdropLabel">
+													UTR or UPI Transaction ID / Reference No.
+												</h1>
+												<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+											</div>
+											<div class="modal-body text-center">
+												<h5 class="fw-bold">PhonePe</h5>
+												<img src="/img/utr_screenshots/phonepe.jpg" alt="UTR or UPI Transaction ID on PhonePe"
+													 class="img-thumbnail">
+
+												<h5 class="mt-5 fw-bold">Google Pay</h5>
+												<img src="/img/utr_screenshots/gpay.jpeg" alt="UTR or UPI Transaction ID on Google Pay"
+													 class="img-thumbnail">
+
+												<h5 class="mt-5 fw-bold">Paytm (or) UPI Apps</h5>
+												<img src="/img/utr_screenshots/paytm.jpg" alt="UTR or UPI Transaction ID on Google Pay"
+													 class="img-thumbnail">
+												<br><br>
+											</div>
+											<div class="modal-footer">
+												<button type="button" class="btn btn-primary btn-sm rounded-pill" data-bs-dismiss="modal">Close</button>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<label for="payment-transaction-id" class="ms-2  mt-3">UTR or UPI Transaction ID / Reference No.
+									<span class="badge bg-warning small rounded-circle mb-1"
+										  title="Click to know about UTR or UPI Transaction ID"
+										  role="button"
+										  data-bs-toggle="modal"
+										  data-bs-target="#staticBackdrop">
+										?
+									</span>
+								</label>
+								<input type="text" id="payment-transaction-id" class="form-control" name="data[Payment][transaction_id]" placeholder="Enter UTR or UPI Transaction ID">
 
 								<label for="payment-screenshot" class="mt-4 mb-2 d-block ms-2">Upload Payment Receipt/Screenshot</label>
 								<input type="file" id="payment-screenshot" name="data[Payment][screenshot]" class="ms-2">
