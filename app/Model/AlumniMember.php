@@ -12,7 +12,7 @@ class AlumniMember extends AppModel {
 		'child3' => 'Child 3',
 	];
 
-	public $hasMany = ['Dependant'];
+	public $hasMany = ['Dependant', 'Payment'];
 
 	public $validate = array(
 		'email' => array(

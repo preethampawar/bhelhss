@@ -69,9 +69,12 @@ $passoutYear = $this->data['User']['passout_year'] ?? '';
 			<div class="col-12 content-head">
 				<div class="mbr-section-head mb-5">
 					<h3 class="mbr-section-title mbr-fonts-style align-center mb-0 display-2">
-						<strong>Register Now!</strong>
+						<strong>Create Account</strong>
 					</h3>
-
+					<p class="mt-3 caption-top text-center">You need to create an account before you register yourself for the event.</p>
+					<p class="mt-3 caption-top text-center">
+						If you have already created an account <a href="/hss/alumni_member_login" class="text-decoration-underline">click here to login</a>.
+					</p>
 				</div>
 			</div>
 		</div>

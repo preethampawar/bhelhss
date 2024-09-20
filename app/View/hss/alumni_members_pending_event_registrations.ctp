@@ -51,15 +51,6 @@ if ($download) {
 	echo $csv;
 	return;
 }
-
-$query = $this->request->query;
-$params = '';
-
-if ($query) {
-	foreach ($query as $k => $v) {
-		$params .= $k . '=' . urlencode($v) . '&';
-	}
-}
 ?>
 <style>
 	a[class*="text-"]:not(.nav-link):not(.dropdown-item):not([role]):not(.navbar-caption):hover{
@@ -76,71 +67,18 @@ if ($query) {
 				<div class="mbr-section-head mb-5">
 
 					<h3 class="mbr-section-title mbr-fonts-style align-center mb-0 display-2">
-						<strong>Alumni Members</strong>
+						<strong>Pending Event Registrations</strong>
 					</h3>
 
 				</div>
 			</div>
 		</div>
-		<div class="mb-4">
 
-			<div class="row text-center">
-				<div class="col-12 col-md-3">
-					<form method="get">
-						<input type="hidden" name="searchby" value="total-registered">
-						<button type="submit" class=" btn btn-info text-center p-4 rounded-pill w-100 fs-4 d-block">
-							Total Registered
-							<br>
-							<span class="badge alert-light text-info rounded-pill fs-3 mt-3"><?php echo $allAlumniMembersCount; ?></span>
-						</button>
-					</form>
-				</div>
-				<div class="col-12 col-md-3">
-					<?php
-					echo $this->Form->create(null, ['url' => '/hss/alumni_members?searchby=registered-today']);
-					?>
-					<input type="hidden" name="data[AlumniMember][search_text]" value="">
-					<input type="hidden" name="data[AlumniMember][date]" value="<?php echo date('Y-m-d'); ?>">
-					<button type="submit" class="btn btn-info text-center p-4 rounded-pill w-100 fs-4 d-block">
-						Registered Today
-						<br>
-						<span class="badge alert-light text-info rounded-pill fs-3 mt-3"><?php echo $todaysAlumniMembersCount; ?></span>
-					</button>
-					<?php
-					echo $this->Form->end();
-					?>
-				</div>
-				<div class="col-12 col-md-3">
-					<form method="get">
-						<input type="hidden" name="searchby" value="accounts-verified">
-						<button type="submit" class=" btn btn-info text-center p-4 rounded-pill w-100 fs-4 d-block">
-							Accounts Verified
-							<br>
-							<span class="badge alert-light text-info rounded-pill fs-3 mt-3"><?php echo $accountsVerifiedCount; ?></span>
-						</button>
-					</form>
-				</div>
-				<div class="col-12 col-md-3">
-					<form method="get">
-						<input type="hidden" name="searchby" value="payments-confirmed">
-						<a href="/hss/payments" class=" btn btn-info text-center p-4 rounded-pill w-100 fs-4 d-block">
-							Payments Confirmed
-							<br>
-							<span class="badge alert-light text-info rounded-pill fs-3 mt-3">
-								<?php echo $paymentsConfirmedCount; ?> / <?php echo $totalPaymentsConfirmedCount; ?>
-							</span>
-						</a>
-					</form>
-				</div>
-			</div>
-
-		</div>
 		<div class="row">
 			<div class="col-12 mb-3 px-4">
 				<div class="navbar-buttons mbr-section-btn text-end">
-					<a href="/hss/add_member" class="btn btn-outline-secondary display-4 m-0 mt-1 py-3 me-3">+ Add Member</a>
-					<a href="/hss/alumni_members_pending_event_registrations" class="btn btn-outline-secondary display-4 m-0 mt-1 py-3 me-3">Pending Event Registrations</a>
-					<a href="/hss/alumni_members/1?<?php echo $params; ?>" class="btn btn-outline-secondary display-4 m-0 mt-1 py-3">Download</a>
+					<a href="/hss/send_event_registration_reminder_emails" class="btn btn-outline-secondary display-4 m-0 mt-1 py-3 me-3">Send Reminder Emails &raquo;</a>
+					<a href="/hss/alumni_members_pending_event_registrations/1" class="btn btn-outline-secondary display-4 m-0 mt-1 py-3">Download</a>
 				</div>
 			</div>
 		</div>
@@ -148,51 +86,11 @@ if ($query) {
 			<div class="">
 
 				<?php
-				$searchText = $this->data['AlumniMember']['search_text'] ?? '';
-				$date = $this->data['AlumniMember']['date'] ?? '';
-				?>
-				<?php echo $this->Form->create() ?>
-				<div class="row">
-					<div class="col-12 col-md-4 mb-3">
-						<input type="search" name="data[AlumniMember][search_text]" placeholder="Name, Phone, Email" class="form-control form-control-sm" value="<?php echo $searchText; ?>">
-					</div>
-					<div class="col-12 col-md-4 mb-3">
-						<input type="date" name="data[AlumniMember][date]" placeholder="Date" class="form-control form-control-sm " value="<?php echo $date; ?>">
-					</div>
-					<div class="col-12 col-md-4 mb-3">
-						<div class="text-start navbar-buttons mbr-section-btn">
-							<button type="submit" class="btn btn-primary display-4 m-0 mt-1 py-3 ">Search</button>
-						</div>
-					</div>
-				</div>
-				<?php echo $this->Form->end() ?>
-
-				<?php
 				if (!empty($alumniMembers)) {
 					?>
 					<p class="mt-3 ms-1">
-						<?php
-						$searchBy = $searchBy ?? '';
-						$title = '';
-						switch ($searchBy) {
-							case 'total-registered':
-								$title = 'Total Registered Members: ';
-								break;
-							case 'accounts-verified':
-								$title = 'Total Accounts Verified: ';
-								break;
-							case 'payments-confirmed':
-								$title = 'Total Payments Confirmed: ';
-								break;
-							case 'registered-today':
-								$title = 'Total Registered Today: ';
-								break;
-							default:
-								$title = 'Total Members: ';
-						}
-						?>
-						<b><span class=""><?php echo $title; ?></span>
-							<span class="badge bg-info fs-6 rounded-pill"><?php echo count($alumniMembers); ?></b></span>
+						<b><span class="">Pending Event Registrations: </span>
+							<span class="badge bg-info fs-6 rounded-pill"><?php echo count($alumniMembers); ?> / <?php echo (int)$allAlumniMembersCount; ?></b></span>
 					</p>
 					<div class="table-responsive">
 						<table class="table table-hover small mt-0">
@@ -204,7 +102,6 @@ if ($query) {
 								<th>Email</th>
 								<th>Passout Details</th>
 								<th class="text-center">Account Verified</th>
-
 								<th>Registered On</th>
 								<th>Actions</th>
 							</tr>
@@ -240,6 +137,7 @@ if ($query) {
 									<td><?php echo $createdon; ?></td>
 									<td>
 										<a href="/hss/member_details/<?php echo $alumniMemberId; ?>" class="">Details</a>
+										<!--
 										<a href="/hss/edit_member/<?php echo $alumniMemberId; ?>" class="ms-2">Edit</a>
 										<a href="/hss/member_payments/<?php echo $alumniMemberId; ?>" class="ms-2">Payments</a>
 
@@ -250,7 +148,7 @@ if ($query) {
 											array('confirm' => 'Are you sure you want to delete this member?', 'class' => 'link-danger ms-2')
 										);
 										?>
-
+										-->
 									</td>
 								</tr>
 								<?php

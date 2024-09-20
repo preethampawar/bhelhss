@@ -125,7 +125,7 @@
 						?>
 
 						<div class="navbar-buttons mbr-section-btn">
-							<a class="btn btn-primary display-4" href="/hss/register"> Register Now!</a>
+							<a class="btn btn-primary display-4" href="/hss/event_registration/"> Register Now!</a>
 						</div>
 
 						<?php

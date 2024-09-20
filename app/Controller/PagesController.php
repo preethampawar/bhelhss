@@ -47,6 +47,7 @@ class PagesController extends AppController {
 	public function beforeFilter() {
 		$this->Auth->allow();
 		parent::beforeFilter();
+		$this->showRegistrationMessage();
 	}
 
 /**

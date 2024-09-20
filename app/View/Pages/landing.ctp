@@ -56,7 +56,7 @@ if (!empty($landingPageGalleryFiles)) {
 					<?php
 					if (!$this->Session->read('AlumniMember')) {
 						?>
-							<a class="btn btn-primary display-7" href="/hss/register">Register Now!</a></div>
+							<a class="btn btn-primary display-7" href="/hss/event_registration">Register Now!</a></div>
 						<?php
 					}
 					?>

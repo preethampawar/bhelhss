@@ -49,7 +49,7 @@ $phone = $this->data['User']['phone'] ?? '';
 				</form>
 
 				<div class="mt-5 text-center">
-					<div>Not a member yet? <a href="/hss/register">Click here to Register</a></div>
+					<div>Not a member yet? <a href="/hss/register">Click here to create your account</a>.</div>
 				</div>
 			</div>
 		</div>

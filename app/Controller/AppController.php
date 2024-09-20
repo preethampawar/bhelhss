@@ -29,6 +29,7 @@ App::uses('Security', 'Utility');
 App::uses('AuthComponent', 'Controller/Component');
 App::uses('CakeEmail', 'Network/Email');
 App::uses('ConnectionManager', 'Model');
+App::uses('Payment', 'Model');
 
 /**
  * Application Controller
@@ -81,14 +82,14 @@ class AppController extends Controller {
 			$this->layout = $this->Session->check('Auth.User.id') ? 'default' : 'hss';
 		}
 
-		if(!$this->Session->check('SiteVisitSet')) {
-			$count = (int)file_get_contents('site_visits');
-			$count++;
-			file_put_contents('site_visits', $count);
-			$this->Session->write('SiteVisitSet', true);
-		}
-		$visitCount = (int)file_get_contents('site_visits');
-		$this->Session->write('SiteVisitCount', $visitCount);
+//		if(!$this->Session->check('SiteVisitSet')) {
+//			$count = (int)file_get_contents('site_visits');
+//			$count++;
+//			file_put_contents('site_visits', $count);
+//			$this->Session->write('SiteVisitSet', true);
+//		}
+//		$visitCount = (int)file_get_contents('site_visits');
+//		$this->Session->write('SiteVisitCount', $visitCount);
 
 
 
@@ -110,6 +111,25 @@ class AppController extends Controller {
 				}
 			}
 
+		}
+	}
+
+	protected function showRegistrationMessage()
+	{
+		$memberInfo['AlumniMember'] = $this->Session->read('AlumniMember');
+		if ($memberInfo['AlumniMember'] && !$this->Session->read('Auth.User.admin')) {
+			$alumniMemberId = $memberInfo['AlumniMember']['id'];
+			$paymentModel = new Payment();
+			$conditions = [
+				'Payment.alumni_member_id' => $alumniMemberId,
+				'Payment.type' => 'event_registration_fee'
+			];
+			$isRegisteredCount = $paymentModel->find('count', ['conditions' => $conditions]);
+
+			if ($isRegisteredCount < 1) {
+				$this->Flash->set('You have not registered yourself for the upcoming Alumni event.
+				<br><a href="/hss/event_registration" class="text-decoration-underline">Click here</a> to register.', ['element' => 'info']);
+			}
 		}
 	}
 
