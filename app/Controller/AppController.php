@@ -127,7 +127,7 @@ class AppController extends Controller {
 			$isRegisteredCount = $paymentModel->find('count', ['conditions' => $conditions]);
 
 			if ($isRegisteredCount < 1) {
-				$this->Flash->set('You have not registered yourself for the upcoming Alumni event.
+				$this->Flash->set('If you have not registered yourself for the upcoming event.
 				<br><a href="/hss/event_registration" class="text-decoration-underline">Click here</a> to register.', ['element' => 'info']);
 			}
 		}

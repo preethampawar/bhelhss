@@ -112,6 +112,7 @@ $passoutYear = $this->data['User']['passout_year'] ?? '';
 							   	id="phone"
 								pattern="^\+(?:[0-9] ?){6,25}[0-9]$"
 								title="+xx xxxxxxxxxx. Ex: +91 9494203040"
+								onchange="$('#phone').val($('#phone').val().trim())"
 								required>
 						</div>
 						<div class="col-md col-sm-12 form-group mb-3" data-for="member">
